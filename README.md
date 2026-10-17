@@ -5,7 +5,7 @@ All characters, artwork, and music are original: stacked-cube number characters,
 
 ## Sections
 - **Talk**: an AAC-style picture board that speaks out loud. It has a sentence strip, colour-coded word types, and a first-letter block on each button. Grown-ups can add buttons with their own photos (stored on the device in IndexedDB).
-- **Hum & Say**: hear a sound, then tap the mic. Any hum or sound at all gets rewarded, measured by volume and length only. Nothing is recorded. Levels go Hum → Vowels → Letter sounds → Words → Numbers.
+- **Shapes, Colors, ABC Match**: hear a sound, then tap the mic. Any hum or sound at all gets rewarded, measured by volume and length only. Nothing is recorded. Levels go Hum → Vowels → Letter sounds → Words → Numbers.
 - **Potty Mission**: a 7-step picture schedule with a count-while-you-sit number block, an original wash-hands jingle with a 20-count, "I went" / "I tried" buttons, a 10-block reward tower with a party at the end, and an "I need to go potty" request button.
 - **ABC & 123**: tracing (ABC, abc, 0–20), counting, putting blocks in order, and a letter/number parade. Each one runs A→Z or Z→A.
 - **Grown-ups** (hold 🔒 for 3 seconds): sound, volume, clapping/cheering, voice, speed, captions, section toggles, calm mode, custom buttons, mic sensitivity, sit count, tower size, progress counts, tips, and install help.

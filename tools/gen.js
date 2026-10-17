@@ -33,4 +33,11 @@ for (let n=1;n<=10;n++) add(`Yay ${nw(n)}!`);
 ['Daddy','Momma','Goose','Tuna'].forEach(t=>add(t,t+'!'));
 ['Momma','Daddy'].forEach(c=>{add(`${c}. Say ${c}!`);add(`Yay ${c}!`);});
 add('You traced the whole alphabet! Amazing, Atlas!');
+// added v4
+['circle','square','triangle','rectangle','star','heart','oval','diamond','hexagon'].forEach(w=>add(w, w[0].toUpperCase()+w.slice(1)+'!'));
+add('Trace the','Trace the'); add('All the shapes! Amazing, Atlas!');
+['red','orange','yellow','green','blue','purple','pink','brown','black','gray'].forEach(w=>add(w, w[0].toUpperCase()+w.slice(1)+'!'));
+add('Which one starts with', 'Which one starts with'); add('Try again!');
+const ABCW=['apple','bird','cat','dog','elephant','fish','grapes','house','ice cream','juice','key','lion','moon','nose','octopus','pig','queen','rainbow','sun','tree','umbrella','violin','whale','xylophone','yarn','zebra'];
+ABCW.forEach((w,i)=>{ const c=L[i]; add(w, w[0].toUpperCase()+w.slice(1)+'.'); add(`${c.toUpperCase()} is for ${w}`, `[[${IPA[c]},]] is for ${w}!`); });
 process.stdout.write(JSON.stringify([...out]));

@@ -9,12 +9,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ---------- settings & stats ---------- */
 const DEF = { sound: true, volume: 0.7, praiseSounds: true, voice: '', rate: 0.85, pitch: 1.1,
-  sections: { talk: true, hum: true, potty: true, play: true }, letterOnWords: true, captions: true,
+  sections: { talk: true, potty: true, play: true, shapes: true, colors: true, match: true }, letterOnWords: true, captions: true,
   micSens: 'med', micHold: 350, sitCount: 20, towerGoal: 10, triesCount: false, calm: false, countMax: 10 };
 const load = (k, d) => { try { return Object.assign(structuredCloneSafe(d), JSON.parse(localStorage.getItem(k) || '{}')); } catch { return structuredCloneSafe(d); } };
 function structuredCloneSafe(o) { return JSON.parse(JSON.stringify(o)); }
-const S = load('atlas.s', DEF); S.sections = Object.assign({}, DEF.sections, S.sections);
-const ST = load('atlas.st', { tower: 0, towers: 0, potty: 0, tries: 0, asks: 0, hums: 0, words: 0, traces: 0, counts: 0, orders: 0, missions: 0 });
+const S = load('atlas.s', DEF); S.sections = Object.assign({}, DEF.sections, S.sections); delete S.sections.hum;
+const ST = load('atlas.st', { tower: 0, towers: 0, potty: 0, tries: 0, asks: 0, words: 0, traces: 0, counts: 0, orders: 0, missions: 0 });
 const save = () => { localStorage.setItem('atlas.s', JSON.stringify(S)); localStorage.setItem('atlas.st', JSON.stringify(ST)); };
 
 /* ---------- audio (Web Audio, everything synthesized) ---------- */
@@ -285,7 +285,7 @@ function pottyRequest() {
 screens.home = {
   title: 'Atlas Blocks',
   render(el) {
-    const T = [['talk', '💬', 'Talk'], ['hum', '🎤', 'Hum & Say'], ['potty', '🚽', 'Potty'], ['play', '🔤', 'ABC 123']].filter(t => S.sections[t[0]]);
+    const T = [['talk', '💬', 'Talk'], ['potty', '🚽', 'Potty'], ['play', '🔤', 'ABC 123'], ['shapes', '⭐', 'Shapes'], ['colors', '🎨', 'Colors'], ['match', '🍎', 'Match']].filter(t => S.sections[t[0]]);
     el.innerHTML = `<div class="hello">${'ATLAS'.split('').map((c, i) => `<button class="hb" data-i="${i}" aria-label="${c}">${letterBlock(c, 70)}</button>`).join('')}</div>
       <div class="tiles">${T.map(([k, p, l]) => `<button class="tile ${k}" data-go="${k}"><span class="pic">${p}</span>${l}</button>`).join('')}</div>
       ${S.sections.potty ? `<button class="bigpotty" id="potReq"><span style="font-size:1.4em">🚽</span> I need to go potty</button>` : ''}`;
@@ -333,98 +333,6 @@ screens.talk = {
       if (!recs.some(Boolean)) return say(sentence.join(' '));
       if (S.captions) caption(sentence.join(' '), 3000);
       for (let i = 0; i < sentence.length; i++) await (recs[i] ? sayBlob(recs[i], sentence[i]) : say(sentence[i], { show: false })); };
-  }
-};
-
-/* ---------- Hum & Say: reward ANY vocalization, shaping hum -> vowels -> sounds -> words ---------- */
-const HUM = [
-  { name: '1 Hum', items: [
-    { t: 'L', v: 'M', cue: 'Mmmm', sayit: 'Hum with me. Mmmmmm.', tune: [[60, 1], [64, 1], [67, 2]] },
-    { t: 'L', v: 'H', cue: 'Hmm hmm', sayit: 'Hmm hmm hmm.', tune: [[67, .5], [67, .5], [64, 1], [60, 1]] },
-    { t: 'N', v: 3, cue: 'Hum 1 2 3', sayit: 'Hum one, two, three.', tune: [[60, 1], [62, 1], [64, 2]] },
-    { t: 'X', v: '🎵 High', cue: 'Hum high', sayit: 'Hum up high.', tune: [[72, 1], [76, 1], [79, 2]] },
-    { t: 'X', v: '🎵 Low', cue: 'Hum low', sayit: 'Hum down low.', tune: [[55, 1], [52, 1], [48, 2]] },
-    { t: 'X', v: '🎶 Song', cue: 'Hum a song', sayit: 'Hum a song with me!', tune: [[60, .5], [62, .5], [64, .5], [67, .5], [69, 1], [67, 1], [64, .5], [62, .5], [60, 2]] }] },
-  { name: '2 Vowels', items: [['A', 'Ahh'], ['E', 'Eee'], ['I', 'Eye'], ['O', 'Ohh'], ['U', 'Ooo']].map(([v, cue]) => ({ t: 'L', v, cue, sayit: `${v} says ${cue}. ${cue}!` })) },
-  { name: '3 Letter sounds', items: ['M', 'B', 'P', 'D', 'S', 'N', 'G', 'T', 'L', 'W'].map(v => ({ t: 'L', v, cue: SOUNDS[v.toLowerCase()], sayit: `${v} says ${SOUNDS[v.toLowerCase()]}` })) },
-  { name: '4 Words', items: [['ma', 'Ma'], ['up', 'Up'], ['go', 'Go'], ['more', 'More'], ['potty', 'Potty'], ['hi', 'Hi'], ['bye', 'Bye'], ['dad', 'Dada'], ['momma', 'Momma'], ['daddy', 'Daddy']].map(([v, cue]) => ({ t: 'W', v, cue, sayit: `${cue}. Say ${cue}!` })) },
-  { name: '5 Numbers', items: Array.from({ length: 10 }, (_, i) => ({ t: 'N', v: i + 1, cue: nword(i + 1), sayit: `${nword(i + 1)}!` })) }
-];
-const SENS = { low: .06, med: .035, high: .018 };
-let humLevel = 0, humItem = 0;
-screens.hum = {
-  title: 'Hum & Say',
-  render(el) {
-    let stream = null, raf = 0, listening = false, autoStop = 0;
-    const visual = (it, big) => it.t === 'L' ? letterBlock(it.v, big ? 130 : 56) : it.t === 'N' ? numberBlock(it.v, big ? Math.max(18, 36 - it.v * 1.5) : 16, { label: big }) :
-      it.t === 'W' ? (big ? `<div style="display:flex;gap:6px">${it.v.toUpperCase().split('').map(c => letterBlock(c, it.v.length > 3 ? 64 : 84)).join('')}</div>` : `<span class="lbl">${esc(it.v)}</span>`) : `<span class="lbl">${esc(it.v)}</span>`;
-    function draw() {
-      const L = HUM[humLevel], it = L.items[humItem] || L.items[0];
-      el.innerHTML = `<div class="levels">${HUM.map((l, i) => `<button class="chip ${i === humLevel ? 'sel' : ''}" data-l="${i}">${l.name}</button>`).join('')}</div>
-        <div class="targets">${L.items.map((t, i) => `<button class="target ${i === humItem ? 'sel' : ''}" data-t="${i}">${visual(t, false)}</button>`).join('')}</div>
-        <div class="stage"><div class="who"><div id="star">${visual(it, true)}</div><div class="cue">${esc(it.cue)}</div></div>
-        <div class="ctrl"><button class="hear" id="hear">🔊 Hear it</button>
-          <div class="meterwrap"><button class="mic" id="mic" aria-label="Your turn: make a sound">🎤</button>
-          <div class="meter" id="meter">${[1, 2, 3, 4, 5, 6].map(n => `<span class="cube" style="--h:${ncol(n)}"></span>`).join('')}</div></div>
-          <div class="muted" id="micMsg" style="font-size:18px;text-align:center">Tap 🎤 then hum or talk!</div>
-          <button class="fallback" id="manual">✓ He made a sound</button></div></div>`;
-      $$('[data-l]', el).forEach(b => b.onclick = () => { stop(); humLevel = +b.dataset.l; humItem = 0; SND.tap(); draw(); });
-      $$('[data-t]', el).forEach(b => b.onclick = () => { stop(); humItem = +b.dataset.t; draw(); hear(); });
-      $('#hear', el).onclick = hear; $('#mic', el).onclick = () => listening ? stop() : listen();
-      $('#manual', el).onclick = () => reward();
-    }
-    const bounce = () => { const s = $('#star', el); if (s) { s.classList.remove('bounce'); void s.offsetWidth; s.classList.add('bounce'); } };
-    async function hear() {
-      stop(); const it = HUM[humLevel].items[humItem]; bounce();
-      if (it.tune) { await sleep(melody(it.tune, 120, 'sine', .3) + 100); }
-      else if (it.t === 'L') SND.letter(it.v); else if (it.t === 'N') SND.num(it.v);
-      await say(it.sayit);
-    }
-    function reward() {
-      stop(); ST.hums++; save(); bounce();
-      const s = $('#star', el); if (s && !calm()) s.classList.add('dance');
-      const it = HUM[humLevel].items[humItem];
-      celebrate({ words: rnd(humLevel === 0 ? ['Great humming!', 'Beautiful humming!', 'I hear you!'] : ['Great sound!', 'I hear you!', 'Yay ' + it.cue + '!', 'Nice talking!']) });
-    }
-    async function listen() {
-      const msg = $('#micMsg', el);
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        msg.textContent = window.isSecureContext ? 'No microphone here. Use ✓ to reward.' : 'Microphone needs the https:// link. Use ✓ to reward.'; return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
-      } catch (e) { msg.textContent = 'Microphone is off. Allow it in settings, or use ✓.'; return; }
-      if (current !== 'hum') { stop(); return; }
-      const ac = audio(); const src = ac.createMediaStreamSource(stream); const an = ac.createAnalyser(); an.fftSize = 1024; src.connect(an);
-      const buf = new Uint8Array(an.fftSize); listening = true;
-      const mic = $('#mic', el); mic.classList.add('live'); msg.textContent = 'Listening… hum or talk!';
-      let floor = 0, frames = 0, voiced = 0, last = performance.now();
-      const base = SENS[S.micSens] || SENS.med;
-      const loop = now => {
-        if (!listening) return;
-        an.getByteTimeDomainData(buf); let sum = 0;
-        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-        const rms = Math.sqrt(sum / buf.length), dt = now - last; last = now; frames++;
-        if (frames < 15) floor = Math.max(floor, rms); // quick room-noise calibration
-        const th = Math.max(base, floor * 2.2);
-        const lvl = Math.min(6, Math.round(rms / th * 3));
-        $$('#meter .cube', el).forEach((c, i) => c.classList.toggle('lit', i < lvl));
-        mic.style.setProperty('--lv', 1 + Math.min(.4, rms * 4));
-        if (frames >= 15 && rms > th) voiced += dt; else voiced = Math.max(0, voiced - dt * .3);
-        if (voiced >= S.micHold) { reward(); return; }
-        raf = requestAnimationFrame(loop);
-      };
-      raf = requestAnimationFrame(loop);
-      autoStop = setTimeout(() => { if (listening) { stop(); const m = $('#micMsg', el); if (m) m.textContent = 'Tap 🎤 to try again!'; } }, 30000);
-    }
-    function stop() {
-      listening = false; cancelAnimationFrame(raf); clearTimeout(autoStop);
-      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-      const mic = $('#mic', el); if (mic) mic.classList.remove('live');
-      $$('#meter .cube', el).forEach(c => c.classList.remove('lit'));
-      const m = $('#micMsg', el); if (m && m.textContent.startsWith('Listening')) m.textContent = 'Tap 🎤 then hum or talk!';
-    }
-    cleanup = stop; draw();
   }
 };
 
@@ -516,6 +424,59 @@ screens.potty = {
   }
 };
 
+/* ---------- shared multi-stroke tracing engine (letters, shapes, color words) ---------- */
+const ROUND_FONT = 'ui-rounded, "Nunito", "Varela Round", Roboto, Arial, sans-serif';
+async function fontReady(f, txt) { if (document.fonts && document.fonts.load) { try { await Promise.race([document.fonts.load(f, txt), sleep(1500)]); } catch (e) {} } }
+const traceShell = (stars = '') => `<div class="tracewrap"><div class="trace" id="tr"><canvas id="g"></canvas><canvas id="d"></canvas></div><div class="tside">
+  <div class="tprog" aria-hidden="true"><i id="tp"></i></div>${stars ? `<div class="abcstars">${stars}</div>` : ''}
+  <div class="btnrow" style="margin-top:10px"><button class="btn alt" id="prev">⬅️</button><button class="btn alt" id="clr">🧽 Try again</button><button class="btn" id="nxt">➡️</button></div></div></div>`;
+/* size the board to the screen so nothing scrolls (portrait: controls below, landscape: beside) */
+function fitTrace(box, aspect = 1) {
+  const wrap = box.parentElement, side = $('.tside', wrap), land = innerWidth > innerHeight;
+  wrap.classList.toggle('land', land);
+  const top = box.getBoundingClientRect().top + scrollY, availH = innerHeight - top - 14 - (land ? 0 : side.offsetHeight + 10);
+  const availW = wrap.clientWidth - (land ? side.offsetWidth + 16 : 0);
+  const w = Math.max(180, Math.floor(Math.min(availW, availH / aspect, 640 / Math.sqrt(aspect))));
+  box.style.width = w + 'px'; box.style.aspectRatio = 'auto'; box.style.height = Math.round(w * aspect) + 'px';
+}
+/* opts.paint(ctx, W, H) -> { fill(), stroke() } draws the target shape; strokes accumulate across finger lifts;
+   celebrates only when >= NEED of the shape's core is covered and the finger has rested IDLE ms */
+function traceBoard(el, { paint, aspect = 1, ink = null, lineW = .075, need = .85, idle = 1000, onDone, prev, next, guide = '#e8edf6', dash = '#9aa8c4' }) {
+  const box = $('#tr', el), g = $('#g', el), d = $('#d', el), dpr = Math.min(2, window.devicePixelRatio || 1);
+  fitTrace(box, aspect);
+  const W = box.clientWidth, H = Math.round(W * aspect); [g, d].forEach(c => { c.width = W * dpr; c.height = H * dpr; });
+  const gc = g.getContext('2d'); gc.scale(dpr, dpr);
+  let p = paint(gc, W, H); gc.fillStyle = guide; gc.strokeStyle = guide; p.fill();
+  gc.setLineDash([10, 12]); gc.lineWidth = 3; gc.strokeStyle = dash; p.stroke();
+  const R = 100, RH = Math.round(R * aspect), m = document.createElement('canvas'); m.width = R; m.height = RH; const mc = m.getContext('2d');
+  p = paint(mc, R, RH); mc.fillStyle = mc.strokeStyle = '#000'; p.fill();
+  const md = mc.getImageData(0, 0, R, RH).data, inM = (x, y) => x >= 0 && y >= 0 && x < R && y < RH && md[(y * R + x) * 4 + 3] > 128;
+  let core = [];
+  for (let y = 0; y < RH; y++) for (let x = 0; x < R; x++) if (inM(x, y) && inM(x - 1, y) && inM(x + 1, y) && inM(x, y - 1) && inM(x, y + 1)) core.push(y * R + x);
+  if (core.length < 40) { core = []; for (let i = 0; i < R * RH; i++) if (md[i * 4 + 3] > 128) core.push(i); }
+  const dc = d.getContext('2d'); dc.scale(dpr, dpr); dc.lineCap = dc.lineJoin = 'round'; dc.lineWidth = W * lineW;
+  const strokes = []; let cur = null, done = false, hue = 0, idleT = 0;
+  const pt = e => { const r = d.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+  d.onpointerdown = e => { if (done) return; clearTimeout(idleT); try { d.setPointerCapture(e.pointerId); } catch (x) {} cur = [pt(e)]; strokes.push(cur); };
+  d.onpointermove = e => { if (!cur) return; const q = cur[cur.length - 1], p2 = pt(e); cur.push(p2);
+    hue = (hue + 3) % 360; dc.strokeStyle = ink || `hsl(${hue} 80% 55%)`; dc.beginPath(); dc.moveTo(q[0] * W, q[1] * H); dc.lineTo(p2[0] * W, p2[1] * H); dc.stroke(); };
+  d.onpointerup = d.onpointercancel = () => { if (!cur) return; cur = null; check(); }; // lifting a finger never ends the trace
+  function coverage() {
+    const s = document.createElement('canvas'); s.width = R; s.height = RH; const sc = s.getContext('2d');
+    sc.lineCap = sc.lineJoin = 'round'; sc.lineWidth = R * .13; sc.strokeStyle = '#000';
+    strokes.forEach(st => { sc.beginPath(); st.forEach((q, i) => i ? sc.lineTo(q[0] * R, q[1] * RH) : sc.moveTo(q[0] * R, q[1] * RH)); if (st.length === 1) sc.lineTo(st[0][0] * R + .5, st[0][1] * RH); sc.stroke(); });
+    const dd = sc.getImageData(0, 0, R, RH).data; let hit = 0; for (const i of core) if (dd[i * 4 + 3] > 0) hit++;
+    return hit / core.length;
+  }
+  function check() { if (done) return; const c = coverage(); $('#tp', el).style.width = Math.min(100, Math.round(c / need * 100)) + '%'; if (c >= need) idleT = setTimeout(finish, idle); }
+  function finish() { if (done || cur) return; done = true; onDone && onDone(); }
+  const base = (cleanup && cleanup.__base) || cleanup; cleanup = () => { clearTimeout(idleT); if (base) try { base(); } catch (e) {} }; cleanup.__base = base;
+  $('#prev', el).onclick = () => { clearTimeout(idleT); SND.tap(); prev(); };
+  $('#nxt', el).onclick = () => { clearTimeout(idleT); SND.tap(); next(); };
+  $('#clr', el).onclick = () => { clearTimeout(idleT); dc.clearRect(0, 0, W, H); strokes.length = 0; done = false; $('#tp', el).style.width = '0'; SND.tap(); };
+  window.__trace = { check, strokes, coverage, core: core.length, get done() { return done; } }; // test hook
+}
+
 /* ---------- ABC & 123 play ---------- */
 const UP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), LO = UP.map(c => c.toLowerCase()), NUMS = Array.from({ length: 21 }, (_, i) => String(i));
 const P = { mode: 'trace', set: 'ABC', rev: false, idx: 0 };
@@ -537,74 +498,27 @@ screens.play = {
     const sayItem = ch => /\d/.test(ch) ? nword(+ch) : ch.toUpperCase() === ch ? `Big ${ch}` : `Little ${ch}`;
     const blockFor = (ch, big) => /\d/.test(ch) ? numberBlock(+ch, big ? Math.max(16, 40 - ch * 1.3) : (+ch > 10 ? 14 : 22)) : letterBlock(ch, big ? 150 : 88);
 
-    // size the square tracing board to the screen so nothing needs scrolling (portrait: controls below, landscape: beside)
-    function fitTrace(box) {
-      const wrap = box.parentElement, side = $('.tside', wrap), land = innerWidth > innerHeight;
-      wrap.classList.toggle('land', land);
-      const top = box.getBoundingClientRect().top + scrollY, availH = innerHeight - top - 14 - (land ? 0 : side.offsetHeight + 10);
-      const availW = wrap.clientWidth - (land ? side.offsetWidth + 16 : 0);
-      box.style.width = Math.max(180, Math.floor(Math.min(availW, availH, 640))) + 'px';
-    }
     async function trace() {
       const l = list(); P.idx = (P.idx + l.length) % l.length; const ch = l[P.idx];
       const curs = P.cursive && /[a-z]/i.test(ch);
       const setKey = /\d/.test(ch) ? '' : P.set + (curs ? '-cursive' : '-print');
       ST.abc = ST.abc || {}; const doneSet = setKey ? (ST.abc[setKey] = ST.abc[setKey] || []) : [];
-      shell(`<div class="tracewrap"><div class="trace" id="tr"><canvas id="g"></canvas><canvas id="d"></canvas></div><div class="tside">
-        <div class="tprog" aria-hidden="true"><i id="tp"></i></div>
-        ${setKey ? `<div class="abcstars">⭐ ${doneSet.length} / 26 letters traced${curs ? ' in cursive' : ''}</div>` : ''}
-        <div class="btnrow" style="margin-top:10px"><button class="btn alt" id="prev">⬅️</button><button class="btn alt" id="clr">🧽 Try again</button><button class="btn" id="nxt">➡️</button></div></div></div>`);
-      const box = $('#tr', el), g = $('#g', el), d = $('#d', el), dpr = Math.min(2, window.devicePixelRatio || 1);
-      const fam = curs ? '"AtlasCursive", cursive' : 'ui-rounded, "Nunito", "Varela Round", Roboto, Arial, sans-serif';
-      const font = s => `${curs ? 400 : 800} ${s}px ${fam}`;
-      const scale = curs ? .55 : (ch.length > 1 ? .62 : .78);
-      if (curs && document.fonts && document.fonts.load) { try { await Promise.race([document.fonts.load(font(40), ch), sleep(1500)]); } catch (e) {} }
-      if (!box.isConnected) return;
-      fitTrace(box);
-      const W = box.clientWidth; [g, d].forEach(c => { c.width = W * dpr; c.height = W * dpr; });
-      const gc = g.getContext('2d'); gc.scale(dpr, dpr); gc.textAlign = 'center'; gc.textBaseline = 'middle';
-      gc.font = font(W * scale); gc.fillStyle = '#e8edf6'; gc.fillText(ch, W / 2, W * .54);
-      gc.setLineDash([10, 12]); gc.lineWidth = 3; gc.strokeStyle = '#9aa8c4'; gc.strokeText(ch, W / 2, W * .54);
-      // low-res mask; score against the letter's "core" (eroded) pixels so the WHOLE shape must be covered
-      const R = 100, m = document.createElement('canvas'); m.width = m.height = R; const mc = m.getContext('2d');
-      mc.textAlign = 'center'; mc.textBaseline = 'middle'; mc.font = font(R * scale); mc.fillText(ch, R / 2, R * .54);
-      const md = mc.getImageData(0, 0, R, R).data, inM = (x, y) => x >= 0 && y >= 0 && x < R && y < R && md[(y * R + x) * 4 + 3] > 128;
-      let core = [];
-      for (let y = 0; y < R; y++) for (let x = 0; x < R; x++) if (inM(x, y) && inM(x - 1, y) && inM(x + 1, y) && inM(x, y - 1) && inM(x, y + 1)) core.push(y * R + x);
-      if (core.length < 40) { core = []; for (let i = 0; i < R * R; i++) if (md[i * 4 + 3] > 128) core.push(i); }
-      const dc = d.getContext('2d'); dc.scale(dpr, dpr); dc.lineCap = dc.lineJoin = 'round'; dc.lineWidth = W * (curs ? .06 : .075);
-      const strokes = []; let cur = null, done = false, hue = 0, idleT = 0;
-      const NEED = .85, IDLE = 1000;
-      const pt = e => { const r = d.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
-      d.onpointerdown = e => { if (done) return; clearTimeout(idleT); try { d.setPointerCapture(e.pointerId); } catch (x) {} cur = [pt(e)]; strokes.push(cur); };
-      d.onpointermove = e => { if (!cur) return; const p = pt(e), q = cur[cur.length - 1]; cur.push(p);
-        hue = (hue + 3) % 360; dc.strokeStyle = `hsl(${hue} 80% 55%)`; dc.beginPath(); dc.moveTo(q[0] * W, q[1] * W); dc.lineTo(p[0] * W, p[1] * W); dc.stroke(); };
-      d.onpointerup = d.onpointercancel = () => { if (!cur) return; cur = null; check(); }; // lifting a finger never ends the letter
-      function coverage() {
-        const s = document.createElement('canvas'); s.width = s.height = R; const sc = s.getContext('2d');
-        sc.lineCap = sc.lineJoin = 'round'; sc.lineWidth = R * .13; sc.strokeStyle = '#000';
-        strokes.forEach(st => { sc.beginPath(); st.forEach((p, i) => i ? sc.lineTo(p[0] * R, p[1] * R) : sc.moveTo(p[0] * R, p[1] * R)); if (st.length === 1) sc.lineTo(st[0][0] * R + .5, st[0][1] * R); sc.stroke(); });
-        const dd = sc.getImageData(0, 0, R, R).data; let hit = 0; for (const i of core) if (dd[i * 4 + 3] > 0) hit++;
-        return hit / core.length;
-      }
-      function check() {
-        if (done) return; const c = coverage(); $('#tp', el).style.width = Math.min(100, Math.round(c / NEED * 100)) + '%';
-        if (c >= NEED) idleT = setTimeout(finish, IDLE); // wait a moment in case he's still adding strokes
-      }
-      function finish() {
-        if (done || cur) return; done = true; ST.traces++;
-        if (setKey && !doneSet.includes(ch)) doneSet.push(ch);
-        const all = setKey && doneSet.length >= 26; if (all) ST.abc[setKey] = [];
-        save(); SND[/\d/.test(ch) ? 'num' : 'letter'](/\d/.test(ch) ? Math.max(1, +ch) : ch);
-        if (all) { celebrate({ big: true, words: 'You traced the whole alphabet! Amazing, Atlas!' }); setTimeout(() => { if (current === 'play') { SND.tower(); celebrate({ big: true, words: 'Woo hoo!' }); } }, 3800); }
-        else celebrate({ words: `${sayItem(ch)}! Great tracing!` });
-      }
-      cleanup = () => { paradeOn = false; clearTimeout(paradeT); clearTimeout(idleT); };
+      shell(traceShell(setKey ? `⭐ ${doneSet.length} / 26 letters traced${curs ? ' in cursive' : ''}` : ''));
+      const fam = curs ? '"AtlasCursive", cursive' : ROUND_FONT, wt = curs ? 400 : 800, scale = curs ? .55 : (ch.length > 1 ? .62 : .78);
+      if (curs) await fontReady(`${wt} 40px ${fam}`, ch);
       say(`Trace ${sayItem(ch)}`);
-      $('#prev', el).onclick = () => { clearTimeout(idleT); P.idx--; trace(); };
-      $('#nxt', el).onclick = () => { clearTimeout(idleT); P.idx++; trace(); };
-      $('#clr', el).onclick = () => { clearTimeout(idleT); dc.clearRect(0, 0, W, W); strokes.length = 0; done = false; $('#tp', el).style.width = '0'; SND.tap(); };
-      window.__trace = { ch, check, strokes, coverage, core: core.length, get done() { return done; } }; // test hook
+      traceBoard(el, {
+        lineW: curs ? .06 : .075,
+        paint: (c, W, H) => { c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `${wt} ${W * scale}px ${fam}`; return { fill: () => c.fillText(ch, W / 2, H * .54), stroke: () => c.strokeText(ch, W / 2, H * .54) }; },
+        onDone: () => {
+          ST.traces++; if (setKey && !doneSet.includes(ch)) doneSet.push(ch);
+          const all = setKey && doneSet.length >= 26; if (all) ST.abc[setKey] = [];
+          save(); SND[/\d/.test(ch) ? 'num' : 'letter'](/\d/.test(ch) ? Math.max(1, +ch) : ch);
+          if (all) { celebrate({ big: true, words: 'You traced the whole alphabet! Amazing, Atlas!' }); setTimeout(() => { if (current === 'play') { SND.tower(); celebrate({ big: true, words: 'Woo hoo!' }); } }, 3800); }
+          else celebrate({ words: `${sayItem(ch)}! Great tracing!` });
+        },
+        prev: () => { P.idx--; trace(); }, next: () => { P.idx++; trace(); }
+      });
     }
 
     function count() {
@@ -663,6 +577,101 @@ screens.play = {
   }
 };
 
+/* ---------- Shapes tracing ---------- */
+const SHAPES = [
+  ['circle', c => { const p = new Path2D(); p.arc(.5, .5, .36, 0, Math.PI * 2); return p; }],
+  ['square', c => { const p = new Path2D(); p.rect(.17, .17, .66, .66); return p; }],
+  ['triangle', c => poly([[.5, .14], [.88, .82], [.12, .82]])],
+  ['rectangle', c => { const p = new Path2D(); p.rect(.08, .26, .84, .48); return p; }],
+  ['star', c => poly(Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? .17 : .41; return [.5 + r * Math.cos(a), .54 + r * Math.sin(a)]; }))],
+  ['heart', c => { const p = new Path2D(); p.moveTo(.5, .86); p.bezierCurveTo(.12, .6, .08, .36, .22, .24); p.bezierCurveTo(.34, .14, .47, .2, .5, .33);
+    p.bezierCurveTo(.53, .2, .66, .14, .78, .24); p.bezierCurveTo(.92, .36, .88, .6, .5, .86); p.closePath(); return p; }],
+  ['oval', c => { const p = new Path2D(); p.ellipse(.5, .5, .41, .27, 0, 0, Math.PI * 2); return p; }],
+  ['diamond', c => poly([[.5, .1], [.82, .5], [.5, .9], [.18, .5]])],
+  ['hexagon', c => poly(Array.from({ length: 6 }, (_, i) => { const a = i * Math.PI / 3; return [.5 + .38 * Math.cos(a), .5 + .38 * Math.sin(a)]; }))]
+];
+function poly(pts) { const p = new Path2D(); pts.forEach(([x, y], i) => i ? p.lineTo(x, y) : p.moveTo(x, y)); p.closePath(); return p; }
+const cap = w => w[0].toUpperCase() + w.slice(1);
+/* draw a unit-square Path2D scaled to W x H as a thick band (fill) or its dashed centre line (stroke) */
+const shapePaint = mk => (c, W, H) => { const path = mk(); const go = (lw) => { c.save(); c.scale(W, H); c.lineJoin = c.lineCap = 'round'; c.lineWidth = lw / W; if (c.getLineDash().length) c.setLineDash(c.getLineDash().map(v => v / W)); c.stroke(path); c.restore(); };
+  return { fill: () => go(W * .12), stroke: () => go(c.lineWidth) }; };
+let shapeIdx = 0;
+screens.shapes = {
+  title: 'Shapes',
+  render(el) {
+    ST.shapesDone = ST.shapesDone || [];
+    const draw = () => {
+      shapeIdx = (shapeIdx + SHAPES.length) % SHAPES.length; const [name, mk] = SHAPES[shapeIdx];
+      el.innerHTML = `<div class="tracehead"><span class="tname">${cap(name)}</span></div>` + traceShell(`⭐ ${ST.shapesDone.length} / ${SHAPES.length} shapes traced`);
+      say(`Trace the ${name}`);
+      traceBoard(el, { paint: shapePaint(mk), lineW: .08,
+        onDone: () => { ST.traces++; if (!ST.shapesDone.includes(name)) ST.shapesDone.push(name);
+          const all = ST.shapesDone.length >= SHAPES.length; if (all) ST.shapesDone = []; save(); SND.chime();
+          celebrate(all ? { big: true, words: 'All the shapes! Amazing, Atlas!' } : { words: `${cap(name)}! Great tracing!` }); },
+        prev: () => { shapeIdx--; draw(); }, next: () => { shapeIdx++; draw(); } });
+    };
+    draw();
+  }
+};
+
+/* ---------- Color tracing: trace the word, the ink is that color ---------- */
+const COLORS = [['red', '#e53935'], ['orange', '#fb8c00'], ['yellow', '#f2c200'], ['green', '#2e9e4f'], ['blue', '#1e6fe0'], ['purple', '#8e44c9'],
+  ['pink', '#f0609e'], ['brown', '#8d5a3b'], ['black', '#222222'], ['gray', '#8a9099']];
+let colorIdx = 0;
+screens.colors = {
+  title: 'Colors',
+  render(el) {
+    const draw = async () => {
+      colorIdx = (colorIdx + COLORS.length) % COLORS.length; const [name, hex] = COLORS[colorIdx], word = name.toUpperCase();
+      el.innerHTML = `<div class="tracehead"><span class="swatch" style="background:${hex}"></span><span class="tname" style="color:${hex}">${cap(name)}</span></div>` + traceShell();
+      await fontReady(`800 40px ${ROUND_FONT}`, word);
+      say(`Trace ${name}`);
+      traceBoard(el, { aspect: .5, ink: hex, lineW: .045, guide: hex + '2e', dash: hex,
+        paint: (c, W, H) => { c.textAlign = 'center'; c.textBaseline = 'middle'; let fs = H * .7; c.font = `800 ${fs}px ${ROUND_FONT}`;
+          const mw = c.measureText(word).width; if (mw > W * .9) fs *= W * .9 / mw; c.font = `800 ${fs}px ${ROUND_FONT}`;
+          return { fill: () => c.fillText(word, W / 2, H * .54), stroke: () => c.strokeText(word, W / 2, H * .54) }; },
+        onDone: () => { ST.traces++; save(); $('#tr', el).style.background = hex + '22'; celebrate({ words: `${cap(name)}! Great tracing!` }); },
+        prev: () => { colorIdx--; draw(); }, next: () => { colorIdx++; draw(); } });
+    };
+    draw();
+  }
+};
+
+/* ---------- ABC Match: tap the picture that starts with the letter ---------- */
+const XYLO = `<svg viewBox="0 0 64 64" width="1em" height="1em" aria-hidden="true"><g stroke="#333" stroke-width="2"><rect x="6" y="14" width="8" height="40" rx="3" fill="#e53935"/><rect x="18" y="18" width="8" height="32" rx="3" fill="#fb8c00"/><rect x="30" y="22" width="8" height="24" rx="3" fill="#f2c200"/><rect x="42" y="26" width="8" height="16" rx="3" fill="#2e9e4f"/><rect x="54" y="29" width="6" height="10" rx="2" fill="#1e6fe0"/></g><line x1="10" y1="60" x2="40" y2="4" stroke="#8d5a3b" stroke-width="3"/><circle cx="40" cy="4" r="4" fill="#8d5a3b"/></svg>`;
+const ABCW = [['apple', '🍎'], ['bird', '🐦'], ['cat', '🐱'], ['dog', '🐶'], ['elephant', '🐘'], ['fish', '🐟'], ['grapes', '🍇'], ['house', '🏠'], ['ice cream', '🍦'],
+  ['juice', '🧃'], ['key', '🔑'], ['lion', '🦁'], ['moon', '🌙'], ['nose', '👃'], ['octopus', '🐙'], ['pig', '🐷'], ['queen', '👸'], ['rainbow', '🌈'], ['sun', '☀️'],
+  ['tree', '🌳'], ['umbrella', '☂️'], ['violin', '🎻'], ['whale', '🐳'], ['xylophone', XYLO], ['yarn', '🧶'], ['zebra', '🦓']];
+let matchIdx = 0, matchRand = false;
+screens.match = {
+  title: 'ABC Match',
+  render(el) {
+    let nextT = 0; cleanup = () => clearTimeout(nextT);
+    const round = () => {
+      clearTimeout(nextT);
+      if (matchRand) matchIdx = Math.floor(Math.random() * 26); matchIdx = (matchIdx + 26) % 26;
+      const L = UP[matchIdx], right = ABCW[matchIdx];
+      const others = shuffle(ABCW.filter((_, i) => i !== matchIdx)).slice(0, 2), opts = shuffle([right, ...others]);
+      el.innerHTML = `<div class="match"><div class="mletter"><button class="hb" id="ml" aria-label="${L}">${letterBlock(L, 120)}</button><div class="mlow">${L}${L.toLowerCase()}</div></div>
+        <div class="mopts">${opts.map(([w, pic]) => `<button class="mopt" data-w="${esc(w)}"><span class="pic">${pic}</span><span>${esc(w)}</span></button>`).join('')}</div></div>
+        <div class="btnrow mnav"><button class="btn alt" id="mp">⬅️</button><button class="btn alt ${matchRand ? 'sel' : ''}" id="mr">🔀 ${matchRand ? 'Mixed' : 'A → Z'}</button><button class="btn" id="mn">➡️</button></div>`;
+      const ask = () => say(`Which one starts with ${L}?`);
+      ask(); $('#ml', el).onclick = () => { SND.letter(L); ask(); };
+      let solved = false;
+      $$('.mopt', el).forEach(b => b.onclick = () => {
+        if (solved) return; const w = b.dataset.w;
+        if (w === right[0]) { solved = true; b.classList.add('right', 'bounce'); ST.matches = (ST.matches || 0) + 1; save(); SND.letter(L);
+          celebrate({ words: `${L} is for ${w}!` }); nextT = setTimeout(() => { if (current === 'match') { matchIdx++; round(); } }, 3400); }
+        else { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); SND.soft(); say(`${cap(w)}. Try again!`); }
+      });
+      $('#mp', el).onclick = () => { SND.tap(); matchIdx--; round(); };
+      $('#mn', el).onclick = () => { SND.tap(); matchIdx++; round(); };
+      $('#mr', el).onclick = () => { SND.tap(); matchRand = !matchRand; round(); };
+    };
+    round();
+  }
+};
+
 /* ---------- Parent area (hold lock 3 seconds) ---------- */
 (function lock() {
   const b = $('#lockBtn'); let t = 0;
@@ -689,7 +698,7 @@ screens.parent = {
       <div class="row"><span></span><button class="sbtn" id="test">🔊 Test voice + praise</button></div></div>
 
     <div class="panel"><h3 style="margin-top:0">Sections on the home screen</h3>
-      ${[['talk', 'Talk board'], ['hum', 'Hum & Say'], ['potty', 'Potty Mission'], ['play', 'ABC & 123']].map(([k, l]) => `<div class="row">${l} ${sw(k, S.sections).replace('data-k', 'data-sec')}</div>`).join('')}
+      ${[['talk', 'Talk board'], ['potty', 'Potty Mission'], ['play', 'ABC & 123'], ['shapes', 'Shapes tracing'], ['colors', 'Color tracing'], ['match', 'ABC Match']].map(([k, l]) => `<div class="row">${l} ${sw(k, S.sections).replace('data-k', 'data-sec')}</div>`).join('')}
       <div class="row">Less motion (calm mode) ${sw('calm')}</div></div>
 
     <div class="panel"><h3 style="margin-top:0">Talk board</h3>
@@ -703,10 +712,6 @@ screens.parent = {
         <button class="sbtn" id="addBtn">+ Add button</button></div>
       <div class="customlist" id="clist"></div></div>
 
-    <div class="panel"><h3 style="margin-top:0">Hum & Say</h3>
-      <div class="row">Microphone sensitivity <select id="sens">${[['high', 'High (quiet hums count)'], ['med', 'Medium'], ['low', 'Low (noisy room)']].map(([v, l]) => `<option value="${v}" ${S.micSens === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="row">Sound needed <select id="hold">${[[200, 'Very short'], [350, 'Short'], [700, 'Longer'], [1200, 'Long hum']].map(([v, l]) => `<option value="${v}" ${+S.micHold === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <p class="muted" style="font-size:16px">Sound is only measured for loudness on the device. Nothing is recorded or saved.</p></div>
 
     <div class="panel"><h3 style="margin-top:0">Potty</h3>
       <div class="row">Sit and count to <select id="sit">${[5, 10, 15, 20, 30].map(v => `<option ${+S.sitCount === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
@@ -716,7 +721,7 @@ screens.parent = {
 
     <div class="panel"><h3 style="margin-top:0">Progress</h3>
       ${[['potty', '🚽 Potty successes'], ['tries', '👍 Potty tries'], ['tower', '🧱 Blocks on current tower'], ['towers', '🏆 Towers built'], ['asks', '🙋 Asked for potty'],
-        ['missions', '🚀 Potty missions finished'], ['hums', '🎤 Sounds rewarded'], ['words', '💬 Talk buttons pressed'], ['traces', '✍️ Letters/numbers traced'], ['counts', '🍎 Counting wins'], ['orders', '🧱 Ordering wins']]
+        ['missions', '🚀 Potty missions finished'], ['words', '💬 Talk buttons pressed'], ['traces', '✍️ Letters/numbers traced'], ['counts', '🍎 Counting wins'], ['orders', '🧱 Ordering wins']]
         .map(([k, l]) => `<div class="row">${l} <b style="font-size:24px">${ST[k]}</b></div>`).join('')}
       <div class="row"><button class="sbtn" id="resetTower">Reset tower</button><button class="sbtn red" id="resetAll">Reset all counts</button></div></div>
 
@@ -745,7 +750,7 @@ screens.parent = {
     $('#voice', el).onchange = e => { S.voice = e.target.value; save(); say('Hi Atlas! Great job!'); };
     $('#test', el).onclick = () => celebrate({ words: 'Great job Atlas!' });
     const sel = (id, k, num = true) => $(id, el).onchange = e => { S[k] = num ? +e.target.value : e.target.value; save(); };
-    sel('#sens', 'micSens', false); sel('#hold', 'micHold'); sel('#sit', 'sitCount'); sel('#goal', 'towerGoal'); sel('#cmax', 'countMax');
+    sel('#sit', 'sitCount'); sel('#goal', 'towerGoal'); sel('#cmax', 'countMax');
     $('#resetTower', el).onclick = () => { if (confirm('Start a new tower at 0?')) { ST.tower = 0; save(); go('parent'); } };
     $('#resetAll', el).onclick = () => { if (confirm('Reset all progress counts?')) { Object.keys(ST).forEach(k => ST[k] = 0); save(); go('parent'); } };
     async function list() {
@@ -788,6 +793,6 @@ screens.parent = {
 
 /* ---------- start ---------- */
 let rsT = 0, lastW = innerWidth;
-addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (current === 'play' && P.mode === 'trace') go('play'); } }, 300); });
+addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if ((current === 'play' && P.mode === 'trace') || current === 'shapes' || current === 'colors') go(current); } }, 300); });
 go('home');
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
