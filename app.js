@@ -111,10 +111,60 @@ function caption(text, ms = 2200) {
   const t = $('#toast'); t.textContent = text; t.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
 }
+/* Bundled voice clips (pre-made, work without any device text-to-speech).
+   Order: whole phrase clip -> sentence clips -> word-group clips -> device speechSynthesis -> big words on screen + tones. */
+const CLIPS = window.ATLAS_AUDIO || {};
+const normKey = s => String(s).toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').trim().replace(/\s+/g, ' ');
+function clipPlan(text) {
+  const whole = normKey(text); if (!whole) return null;
+  if (CLIPS[whole]) return [CLIPS[whole]];
+  const plan = [];
+  for (const part of String(text).split(/(?<=[.!?,])\s+/)) {
+    const k = normKey(part); if (!k) continue;
+    if (CLIPS[k]) { plan.push(CLIPS[k]); continue; }
+    const w = k.split(' '); let i = 0;
+    while (i < w.length) { // greedy longest word-group match
+      let j = w.length; for (; j > i; j--) if (CLIPS[w.slice(i, j).join(' ')]) break;
+      if (j === i) return null; plan.push(CLIPS[w.slice(i, j).join(' ')]); i = j;
+    }
+  }
+  return plan.length ? plan : null;
+}
+let curAudio = null, sayToken = 0;
+function stopSpeech() { sayToken++; if (curAudio) { try { curAudio.pause(); } catch (e) {} curAudio = null; } if (TTS) try { TTS.cancel(); } catch (e) {} }
+function playSrc(src, rate, tok) {
+  return new Promise(res => {
+    if (tok !== sayToken) return res(false);
+    const a = new Audio(src); curAudio = a; let done = false;
+    const fin = ok => { if (!done) { done = true; res(ok); } };
+    a.volume = Math.min(1, S.volume + .3);
+    try { a.playbackRate = Math.max(.6, Math.min(1.3, rate / .85)); a.preservesPitch = true; } catch (e) {}
+    a.onended = () => fin(true); a.onerror = () => fin(false);
+    setTimeout(() => fin(true), 9000);
+    const p = a.play(); if (p && p.catch) p.catch(() => fin(false));
+  });
+}
+async function playClips(plan, rate) {
+  stopSpeech(); const tok = sayToken;
+  for (const f of plan) { if (tok !== sayToken) return true; if (!(await playSrc(`audio/${f}.mp3`, rate, tok))) return false; }
+  return true;
+}
 function say(text, { show = S.captions, rate = S.rate, quiet = false } = {}) {
   const est = 600 + text.length * 75 / rate;
   if (show) caption(text, Math.max(1800, est + 400));
   if (!S.sound) return sleep(400);
+  const plan = clipPlan(text);
+  if (plan) return playClips(plan, rate).then(ok => ok ? undefined : sayDevice(text, { show, rate, quiet, est }));
+  return sayDevice(text, { show, rate, quiet, est });
+}
+/* play a parent-recorded clip (Blob) */
+function sayBlob(blob, text) {
+  if (S.captions) caption(text, 2200);
+  if (!S.sound) return sleep(400);
+  stopSpeech(); const tok = sayToken; const u = URL.createObjectURL(blob);
+  return playSrc(u, S.rate, tok).then(ok => { URL.revokeObjectURL(u); if (!ok) return say(text); });
+}
+function sayDevice(text, { show, rate, quiet, est }) {
   const hasVoice = TTS && (voices.length || TTS.getVoices().length);
   if (!hasVoice && quiet) return sleep(400);
   if (!hasVoice) { // fallback: big caption (always shown here) + friendly "talk" tones
@@ -155,10 +205,11 @@ function letterBlock(ch, c = 84, cls = '') {
 const SOUNDS = { a: 'ah', b: 'buh', c: 'kuh', d: 'duh', e: 'eh', f: 'fff', g: 'guh', h: 'hhh', i: 'ih', j: 'juh', k: 'kuh', l: 'lll', m: 'mmm', n: 'nnn', o: 'aw',
   p: 'puh', q: 'kwuh', r: 'rrr', s: 'sss', t: 'tuh', u: 'uh', v: 'vvv', w: 'wuh', x: 'ks', y: 'yuh', z: 'zzz' };
 const NUMW = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
-const nword = n => NUMW[n] || String(n);
+const TENW = ['', '', 'twenty', 'thirty', 'forty', 'fifty'];
+const nword = n => NUMW[n] || (n > 20 && n < 60 ? TENW[Math.floor(n / 10)] + (n % 10 ? '-' + NUMW[n % 10] : '') : String(n));
 
 /* ---------- celebration: confetti + clapping hands + cheering blocks + applause + spoken praise ---------- */
-const PRAISE = ['Yay Atlas!', 'Great job!', 'You did it!', 'Woo hoo!', 'Awesome!', 'Way to go!', 'High five!', 'Super!'];
+const PRAISE = ['Yay Atlas!', 'Great job!', 'You did it!', 'Woo hoo!', 'Awesome!', 'Way to go!', 'High five!', 'Super!', 'Great job Atlas!', 'Good job Atlas!', 'Atlas, you did it!'];
 const calm = () => S.calm || matchMedia('(prefers-reduced-motion: reduce)').matches;
 let celebrating = 0;
 function celebrate({ big = false, words = null, speak = true } = {}) {
@@ -218,7 +269,7 @@ function go(name, arg) {
   current = name; const sc = screens[name];
   $('#title').textContent = sc.title; $('#backBtn').hidden = name === 'home';
   $('#screen').innerHTML = ''; window.scrollTo(0, 0);
-  $('#toast').classList.remove('show'); if (TTS) try { TTS.cancel(); } catch (e) {}
+  $('#toast').classList.remove('show'); stopSpeech();
   sc.render($('#screen'), arg);
   document.body.classList.toggle('calm', !!S.calm);
 }
@@ -264,7 +315,7 @@ screens.talk = {
       <button id="back1" aria-label="Remove last">⌫</button><button class="say" id="sayAll" aria-label="Say it">🔊</button></div>
       <div class="grid" id="grid"></div>`;
     let custom = []; try { custom = await DB.all(); } catch (e) {}
-    const items = CORE.concat(custom.map(c => ({ w: c.label, say: c.say || c.label, img: c.blob, c: 'custom' })));
+    const items = CORE.concat(custom.map(c => ({ w: c.label, say: c.say || c.label, img: c.blob, rec: c.audio, c: 'custom' })));
     $('#grid', el).innerHTML = items.map((it, i) => `<button class="word ${it.c}" data-i="${i}">
       ${S.letterOnWords ? letterBlock(it.w[0].toUpperCase(), 34, 'small') : ''}
       ${it.img ? `<img alt="" src="${blobURL(it.img)}">` : `<span class="pic">${it.p}</span>`}<span>${esc(it.w)}</span></button>`).join('');
@@ -273,11 +324,14 @@ screens.talk = {
       const it = items[b.dataset.i]; ST.words++; save();
       b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 200);
       sentence.push(it.w); if (sentence.length > 6) sentence.shift(); draw();
-      say(it.say || it.w);
+      if (it.rec) sayBlob(it.rec, it.say || it.w); else say(it.say || it.w);
       if (it.c === 'thing' && it.w === 'potty') { ST.asks++; save(); celebrate({ words: 'Great asking!', speak: false }); }
     });
     $('#back1', el).onclick = () => { sentence.pop(); draw(); SND.tap(); };
-    $('#sayAll', el).onclick = () => { if (sentence.length) say(sentence.join(' ')); else SND.soft(); };
+    $('#sayAll', el).onclick = async () => { if (!sentence.length) return SND.soft(); const recs = sentence.map(w => (items.find(x => x.w === w && x.rec) || {}).rec);
+      if (!recs.some(Boolean)) return say(sentence.join(' '));
+      if (S.captions) caption(sentence.join(' '), 3000);
+      for (let i = 0; i < sentence.length; i++) await (recs[i] ? sayBlob(recs[i], sentence[i]) : say(sentence[i], { show: false })); };
   }
 };
 
@@ -591,7 +645,7 @@ screens.parent = {
       <div class="row">Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="${S.volume}"></div>
       <div class="row">Clapping & cheering on praise ${sw('praiseSounds')}</div>
       <div class="row">Voice <select id="voice"><option value="">Default</option>${vs.map(v => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === S.voice ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('')}</select></div>
-      ${vs.length ? '' : `<div class="note">No speech voices found on this device. The app will show big words on screen and play a tone instead. On a Kindle Fire: Settings → Accessibility → Text-to-Speech, install/choose a voice, then reopen the app.</div>`}
+      <div class="note">All built-in words and praise use the app's own recorded voice, so it talks even on tablets with no text-to-speech (like Kindle Kids profiles). For your own picture buttons, record your voice when you add them.${vs.length ? '' : ' (No device voices found: anything without a clip shows big words on screen.)'}</div>
       <div class="row">Talking speed <input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="${S.rate}"></div>
       <div class="row">Show words on screen when talking ${sw('captions')}</div>
       <div class="row"><span></span><button class="sbtn" id="test">🔊 Test voice + praise</button></div></div>
@@ -607,6 +661,7 @@ screens.parent = {
         <input type="file" id="ph" accept="image/*">
         <input type="text" id="lab" placeholder="Word on button (e.g. Grandma)" maxlength="24">
         <input type="text" id="phr" placeholder="What it says (optional, e.g. I want Grandma)" maxlength="80">
+        <div class="btnrow" style="justify-content:flex-start;gap:8px"><button class="sbtn" id="recBtn">🎤 Record voice</button><button class="sbtn" id="recPlay" hidden>▶️ Play</button><span class="muted" id="recMsg" style="font-size:15px">Record yourself saying it (this tablet has no built-in voice for new words).</span></div>
         <button class="sbtn" id="addBtn">+ Add button</button></div>
       <div class="customlist" id="clist"></div></div>
 
@@ -660,11 +715,33 @@ screens.parent = {
       $('#clist', el).innerHTML = c.length ? c.map(x => `<span class="it"><img alt="" src="${blobURL(x.blob)}">${esc(x.label)}<button class="sbtn red" data-del="${x.id}" aria-label="Delete ${esc(x.label)}">✕</button></span>`).join('') : '<span class="muted">No custom buttons yet.</span>';
       $$('[data-del]', el).forEach(b => b.onclick = async () => { if (confirm('Delete this button?')) { await DB.del(b.dataset.del); list(); } });
     }
+    // parent voice recording for custom buttons (MediaRecorder)
+    let recBlob = null, rec = null, recStream = null, recT = 0;
+    const stopRec = () => { clearTimeout(recT); if (rec && rec.state !== 'inactive') rec.stop(); };
+    cleanup = () => { stopRec(); if (recStream) recStream.getTracks().forEach(t => t.stop()); };
+    $('#recBtn', el).onclick = async () => {
+      if (rec && rec.state === 'recording') return stopRec();
+      if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('#recMsg', el).textContent = 'Recording is not supported in this browser.'; return; }
+      try {
+        recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+        rec = type ? new MediaRecorder(recStream, { mimeType: type }) : new MediaRecorder(recStream); const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => { recStream.getTracks().forEach(t => t.stop()); recStream = null;
+          recBlob = chunks.length ? new Blob(chunks, { type: rec.mimeType || type || 'audio/webm' }) : null;
+          $('#recBtn', el).textContent = recBlob ? '🎤 Record again' : '🎤 Record voice'; $('#recPlay', el).hidden = !recBlob;
+          $('#recMsg', el).textContent = recBlob ? 'Got it! Tap Play to check, then Add button.' : 'Nothing recorded, try again.'; };
+        rec.start(); $('#recBtn', el).textContent = '⏹ Stop'; $('#recMsg', el).textContent = 'Recording… speak now (stops after 6 seconds).';
+        recT = setTimeout(stopRec, 6000);
+      } catch (e) { $('#recMsg', el).textContent = 'Microphone not allowed. Allow it in browser settings to record.'; }
+    };
+    $('#recPlay', el).onclick = () => { if (recBlob) sayBlob(recBlob, $('#lab', el).value.trim() || 'Your recording'); };
     $('#addBtn', el).onclick = async () => {
       const f = $('#ph', el).files[0], label = $('#lab', el).value.trim();
       if (!f || !label) { caption('Pick a photo and type a word', 2000); return; }
-      try { const blob = await shrinkImage(f); await DB.put({ id: 'c' + Date.now(), label, say: $('#phr', el).value.trim() || label, blob, at: Date.now() });
-        $('#ph', el).value = ''; $('#lab', el).value = ''; $('#phr', el).value = ''; caption('Added to the Talk board!'); list(); }
+      try { const blob = await shrinkImage(f); const o = { id: 'c' + Date.now(), label, say: $('#phr', el).value.trim() || label, blob, at: Date.now() };
+        if (recBlob) o.audio = recBlob; await DB.put(o);
+        $('#ph', el).value = ''; $('#lab', el).value = ''; $('#phr', el).value = ''; recBlob = null; $('#recPlay', el).hidden = true; $('#recMsg', el).textContent = 'Saved.'; caption('Added to the Talk board!'); list(); }
       catch (e) { caption('Could not save that photo'); }
     };
     list();
