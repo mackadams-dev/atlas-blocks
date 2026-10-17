@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#16213e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Atlas Blocks">
+<meta name="description" content="Talk, hum, potty and ABC/123 play for Atlas">
+<title>Atlas Blocks</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="backBtn" class="iconbtn" aria-label="Home" hidden>⬅︎</button>
+    <h1 id="title">Atlas Blocks</h1>
+    <button id="lockBtn" class="iconbtn lock" aria-label="Grown-ups: hold for 3 seconds">
+      <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="16"/></svg>
+      <span>🔒</span>
+    </button>
+  </header>
+  <main id="screen" tabindex="-1"></main>
+</div>
+<div id="fx" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
