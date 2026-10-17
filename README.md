@@ -19,3 +19,4 @@ Install it on a Kindle Fire (Silk): ⋮ menu → Add to Home Screen. On iPhone/i
 
 ## Voice clips
 All built-in speech is pre-recorded (Piper neural TTS, en_US "amy" voice) in `audio/*.mp3`, mapped in `audio/manifest.js`, so the app talks on devices with no text-to-speech (e.g. Kindle Amazon Kids profiles). Order: bundled clip → device speechSynthesis → big on-screen words + tones. Parent-added picture buttons can have a voice recording (Grown-ups → Add a picture button → Record voice). Regenerate clips with `tools/gen.js` + `tools/synth.py`, then bump `CACHE` in `sw.js`.
+Letter names are synthesized from IPA phonemes (`[[...]]`), checked with offline Whisper ASR (`tools/asr.py`, `tools/fix.py`). Cursive tracing uses the Playwrite US Trad font (SIL Open Font License, Google Fonts) in `fonts/cursive.woff2`.

@@ -126,7 +126,7 @@ p{font-size:18px;line-height:1.5}
 .stars{font-size:28px;letter-spacing:4px}
 
 /* Play */
-.trace{position:relative;width:100%;max-width:640px;aspect-ratio:1/1;margin:0 auto;background:#fff;border:3px solid var(--line);border-radius:28px;overflow:hidden;touch-action:none}
+.trace{position:relative;width:min(100%,640px,calc(100vh - 300px));aspect-ratio:1/1;flex:none;margin:0 auto;background:#fff;border:3px solid var(--line);border-radius:28px;overflow:hidden;touch-action:none}
 .trace canvas{position:absolute;inset:0;width:100%;height:100%}
 .objs{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;background:var(--card);border:3px solid var(--line);border-radius:28px;padding:18px;min-height:180px}
 .obj{width:84px;height:84px;font-size:60px;border-radius:20px;position:relative;display:grid;place-items:center}
@@ -213,3 +213,14 @@ body.calm .cheerrow,body.calm .praise{animation:none}
   .tower .cube{--c:min(5.4vh,56px)}
   .stage .who{min-height:200px}
 }
+@font-face{font-family:"AtlasCursive";src:url(fonts/cursive.woff2) format("woff2");font-display:block}
+.tprog{height:16px;border-radius:9px;background:#e3e8f2;overflow:hidden;margin-top:10px}
+.tprog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#21a67a,#f4c22b);transition:width .25s}
+.abcstars{font-size:15px;text-align:center;margin-top:6px;color:#667}
+.tracewrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.tracewrap .tside{width:100%;max-width:640px}
+.tracewrap.land{flex-direction:row;justify-content:center;align-items:center;gap:16px}
+.tracewrap.land .tside{width:220px;flex:none}
+.tracewrap.land .btnrow{flex-direction:column;align-items:stretch}
+@media (orientation:landscape) and (max-height:820px){#screen{padding-top:8px;padding-bottom:8px}.tabs{margin-bottom:6px}.tabs .chip{padding-top:6px;padding-bottom:6px}}
+.tracewrap.land .trace{margin:0}

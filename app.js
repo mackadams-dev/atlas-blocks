@@ -304,7 +304,8 @@ const CORE = [
   { w: 'I want', p: '🙋', c: 'verb' }, { w: 'more', p: '➕', c: 'social' }, { w: 'all done', p: '✋', c: 'social' }, { w: 'help', p: '🆘', c: 'verb' },
   { w: 'eat', p: '🍎', c: 'verb' }, { w: 'drink', p: '🥤', c: 'verb' }, { w: 'potty', p: '🚽', c: 'thing', say: 'I need to go potty' }, { w: 'play', p: '🧸', c: 'verb' },
   { w: 'yes', p: '👍', c: 'social' }, { w: 'no', p: '👎', c: 'no' }, { w: 'hurt', p: '🤕', c: 'feel' }, { w: 'happy', p: '😀', c: 'feel' },
-  { w: 'sad', p: '😢', c: 'feel' }, { w: 'mad', p: '😠', c: 'feel' }, { w: 'Dad', p: '👨', c: 'people' }, { w: 'Mom', p: '👩', c: 'people' },
+  { w: 'sad', p: '😢', c: 'feel' }, { w: 'mad', p: '😠', c: 'feel' }, { w: 'Daddy', p: '👨', c: 'people' }, { w: 'Momma', p: '👩', c: 'people' },
+  { w: 'Goose', p: '🐶', c: 'people' }, { w: 'Tuna', p: '🐱', c: 'people' },
   { w: 'music', p: '🎵', c: 'thing' }, { w: 'blocks', p: '🧱', c: 'thing' }, { w: 'hug', p: '🤗', c: 'social' }, { w: 'tired', p: '😴', c: 'feel' }
 ];
 screens.talk = {
@@ -346,7 +347,7 @@ const HUM = [
     { t: 'X', v: '🎶 Song', cue: 'Hum a song', sayit: 'Hum a song with me!', tune: [[60, .5], [62, .5], [64, .5], [67, .5], [69, 1], [67, 1], [64, .5], [62, .5], [60, 2]] }] },
   { name: '2 Vowels', items: [['A', 'Ahh'], ['E', 'Eee'], ['I', 'Eye'], ['O', 'Ohh'], ['U', 'Ooo']].map(([v, cue]) => ({ t: 'L', v, cue, sayit: `${v} says ${cue}. ${cue}!` })) },
   { name: '3 Letter sounds', items: ['M', 'B', 'P', 'D', 'S', 'N', 'G', 'T', 'L', 'W'].map(v => ({ t: 'L', v, cue: SOUNDS[v.toLowerCase()], sayit: `${v} says ${SOUNDS[v.toLowerCase()]}` })) },
-  { name: '4 Words', items: [['ma', 'Ma'], ['up', 'Up'], ['go', 'Go'], ['more', 'More'], ['potty', 'Potty'], ['hi', 'Hi'], ['bye', 'Bye'], ['dad', 'Dada']].map(([v, cue]) => ({ t: 'W', v, cue, sayit: `${cue}. Say ${cue}!` })) },
+  { name: '4 Words', items: [['ma', 'Ma'], ['up', 'Up'], ['go', 'Go'], ['more', 'More'], ['potty', 'Potty'], ['hi', 'Hi'], ['bye', 'Bye'], ['dad', 'Dada'], ['momma', 'Momma'], ['daddy', 'Daddy']].map(([v, cue]) => ({ t: 'W', v, cue, sayit: `${cue}. Say ${cue}!` })) },
   { name: '5 Numbers', items: Array.from({ length: 10 }, (_, i) => ({ t: 'N', v: i + 1, cue: nword(i + 1), sayit: `${nword(i + 1)}!` })) }
 ];
 const SENS = { low: .06, med: .035, high: .018 };
@@ -527,46 +528,83 @@ screens.play = {
     function shell(inner) {
       el.innerHTML = `<div class="tabs">${[['trace', '✍️ Trace'], ['count', '🍎 Count'], ['order', '🧱 Order'], ['parade', '🎵 Parade']].map(([k, l]) => `<button class="chip ${P.mode === k ? 'sel' : ''}" data-m="${k}">${l}</button>`).join('')}</div>
         ${P.mode === 'count' ? '' : `<div class="tabs">${['ABC', 'abc', '123'].map(s => `<button class="chip ${P.set === s ? 'sel' : ''}" data-s="${s}">${s}</button>`).join('')}
-        <button class="chip ${P.rev ? 'sel' : ''}" id="rev">${P.set === '123' ? (P.rev ? '20 → 0' : '0 → 20') : (P.rev ? 'Z → A' : 'A → Z')}</button></div>`}<div id="pl">${inner}</div>`;
+        ${P.mode === 'trace' && P.set !== '123' ? `<button class="chip ${P.cursive ? 'sel' : ''}" id="cur">✒️ Cursive</button>` : ''}<button class="chip ${P.rev ? 'sel' : ''}" id="rev">${P.set === '123' ? (P.rev ? '20 → 0' : '0 → 20') : (P.rev ? 'Z → A' : 'A → Z')}</button></div>`}<div id="pl">${inner}</div>`;
       $$('[data-m]', el).forEach(b => b.onclick = () => { cleanup(); P.mode = b.dataset.m; P.idx = 0; SND.tap(); render(); });
       $$('[data-s]', el).forEach(b => b.onclick = () => { cleanup(); P.set = b.dataset.s; P.idx = 0; SND.tap(); render(); });
+      const cu = $('#cur', el); if (cu) cu.onclick = () => { cleanup(); P.cursive = !P.cursive; P.idx = 0; SND.tap(); render(); };
       const r = $('#rev', el); if (r) r.onclick = () => { cleanup(); P.rev = !P.rev; P.idx = 0; SND.tap(); render(); };
     }
     const sayItem = ch => /\d/.test(ch) ? nword(+ch) : ch.toUpperCase() === ch ? `Big ${ch}` : `Little ${ch}`;
     const blockFor = (ch, big) => /\d/.test(ch) ? numberBlock(+ch, big ? Math.max(16, 40 - ch * 1.3) : (+ch > 10 ? 14 : 22)) : letterBlock(ch, big ? 150 : 88);
 
-    function trace() {
+    // size the square tracing board to the screen so nothing needs scrolling (portrait: controls below, landscape: beside)
+    function fitTrace(box) {
+      const wrap = box.parentElement, side = $('.tside', wrap), land = innerWidth > innerHeight;
+      wrap.classList.toggle('land', land);
+      const top = box.getBoundingClientRect().top + scrollY, availH = innerHeight - top - 14 - (land ? 0 : side.offsetHeight + 10);
+      const availW = wrap.clientWidth - (land ? side.offsetWidth + 16 : 0);
+      box.style.width = Math.max(180, Math.floor(Math.min(availW, availH, 640))) + 'px';
+    }
+    async function trace() {
       const l = list(); P.idx = (P.idx + l.length) % l.length; const ch = l[P.idx];
-      shell(`<div class="trace" id="tr"><canvas id="g"></canvas><canvas id="d"></canvas></div>
-        <div class="btnrow" style="margin-top:14px"><button class="btn alt" id="prev">⬅️</button><button class="btn alt" id="clr">🧽 Clear</button><button class="btn" id="nxt">➡️</button></div>`);
+      const curs = P.cursive && /[a-z]/i.test(ch);
+      const setKey = /\d/.test(ch) ? '' : P.set + (curs ? '-cursive' : '-print');
+      ST.abc = ST.abc || {}; const doneSet = setKey ? (ST.abc[setKey] = ST.abc[setKey] || []) : [];
+      shell(`<div class="tracewrap"><div class="trace" id="tr"><canvas id="g"></canvas><canvas id="d"></canvas></div><div class="tside">
+        <div class="tprog" aria-hidden="true"><i id="tp"></i></div>
+        ${setKey ? `<div class="abcstars">⭐ ${doneSet.length} / 26 letters traced${curs ? ' in cursive' : ''}</div>` : ''}
+        <div class="btnrow" style="margin-top:10px"><button class="btn alt" id="prev">⬅️</button><button class="btn alt" id="clr">🧽 Try again</button><button class="btn" id="nxt">➡️</button></div></div></div>`);
       const box = $('#tr', el), g = $('#g', el), d = $('#d', el), dpr = Math.min(2, window.devicePixelRatio || 1);
+      const fam = curs ? '"AtlasCursive", cursive' : 'ui-rounded, "Nunito", "Varela Round", Roboto, Arial, sans-serif';
+      const font = s => `${curs ? 400 : 800} ${s}px ${fam}`;
+      const scale = curs ? .55 : (ch.length > 1 ? .62 : .78);
+      if (curs && document.fonts && document.fonts.load) { try { await Promise.race([document.fonts.load(font(40), ch), sleep(1500)]); } catch (e) {} }
+      if (!box.isConnected) return;
+      fitTrace(box);
       const W = box.clientWidth; [g, d].forEach(c => { c.width = W * dpr; c.height = W * dpr; });
-      const font = s => `800 ${s}px ui-rounded, "Nunito", "Varela Round", Roboto, Arial, sans-serif`;
       const gc = g.getContext('2d'); gc.scale(dpr, dpr); gc.textAlign = 'center'; gc.textBaseline = 'middle';
-      gc.font = font(W * (ch.length > 1 ? .62 : .78)); gc.fillStyle = '#e8edf6'; gc.fillText(ch, W / 2, W * .54);
+      gc.font = font(W * scale); gc.fillStyle = '#e8edf6'; gc.fillText(ch, W / 2, W * .54);
       gc.setLineDash([10, 12]); gc.lineWidth = 3; gc.strokeStyle = '#9aa8c4'; gc.strokeText(ch, W / 2, W * .54);
-      // low-res mask for coverage scoring
+      // low-res mask; score against the letter's "core" (eroded) pixels so the WHOLE shape must be covered
       const R = 100, m = document.createElement('canvas'); m.width = m.height = R; const mc = m.getContext('2d');
-      mc.textAlign = 'center'; mc.textBaseline = 'middle'; mc.font = font(R * (ch.length > 1 ? .62 : .78)); mc.fillText(ch, R / 2, R * .54);
-      const mask = mc.getImageData(0, 0, R, R).data; let total = 0; for (let i = 3; i < mask.length; i += 4) if (mask[i] > 128) total++;
-      const dc = d.getContext('2d'); dc.scale(dpr, dpr); dc.lineCap = dc.lineJoin = 'round'; dc.lineWidth = W * .075;
-      const strokes = []; let cur = null, done = false, hue = 0;
+      mc.textAlign = 'center'; mc.textBaseline = 'middle'; mc.font = font(R * scale); mc.fillText(ch, R / 2, R * .54);
+      const md = mc.getImageData(0, 0, R, R).data, inM = (x, y) => x >= 0 && y >= 0 && x < R && y < R && md[(y * R + x) * 4 + 3] > 128;
+      let core = [];
+      for (let y = 0; y < R; y++) for (let x = 0; x < R; x++) if (inM(x, y) && inM(x - 1, y) && inM(x + 1, y) && inM(x, y - 1) && inM(x, y + 1)) core.push(y * R + x);
+      if (core.length < 40) { core = []; for (let i = 0; i < R * R; i++) if (md[i * 4 + 3] > 128) core.push(i); }
+      const dc = d.getContext('2d'); dc.scale(dpr, dpr); dc.lineCap = dc.lineJoin = 'round'; dc.lineWidth = W * (curs ? .06 : .075);
+      const strokes = []; let cur = null, done = false, hue = 0, idleT = 0;
+      const NEED = .85, IDLE = 1000;
       const pt = e => { const r = d.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
-      d.onpointerdown = e => { d.setPointerCapture(e.pointerId); cur = [pt(e)]; strokes.push(cur); };
+      d.onpointerdown = e => { if (done) return; clearTimeout(idleT); try { d.setPointerCapture(e.pointerId); } catch (x) {} cur = [pt(e)]; strokes.push(cur); };
       d.onpointermove = e => { if (!cur) return; const p = pt(e), q = cur[cur.length - 1]; cur.push(p);
         hue = (hue + 3) % 360; dc.strokeStyle = `hsl(${hue} 80% 55%)`; dc.beginPath(); dc.moveTo(q[0] * W, q[1] * W); dc.lineTo(p[0] * W, p[1] * W); dc.stroke(); };
-      d.onpointerup = d.onpointercancel = () => { cur = null; score(); };
-      function score() {
-        if (done) return; const s = document.createElement('canvas'); s.width = s.height = R; const sc = s.getContext('2d');
-        sc.lineCap = sc.lineJoin = 'round'; sc.lineWidth = R * .11; sc.strokeStyle = '#000';
+      d.onpointerup = d.onpointercancel = () => { if (!cur) return; cur = null; check(); }; // lifting a finger never ends the letter
+      function coverage() {
+        const s = document.createElement('canvas'); s.width = s.height = R; const sc = s.getContext('2d');
+        sc.lineCap = sc.lineJoin = 'round'; sc.lineWidth = R * .13; sc.strokeStyle = '#000';
         strokes.forEach(st => { sc.beginPath(); st.forEach((p, i) => i ? sc.lineTo(p[0] * R, p[1] * R) : sc.moveTo(p[0] * R, p[1] * R)); if (st.length === 1) sc.lineTo(st[0][0] * R + .5, st[0][1] * R); sc.stroke(); });
-        const dd = sc.getImageData(0, 0, R, R).data; let hit = 0; for (let i = 3; i < dd.length; i += 4) if (mask[i] > 128 && dd[i] > 0) hit++;
-        if (hit / total > .55) { done = true; ST.traces++; save(); SND[/\d/.test(ch) ? 'num' : 'letter'](/\d/.test(ch) ? Math.max(1, +ch) : ch); celebrate({ words: `${sayItem(ch)}! Great tracing!` }); }
+        const dd = sc.getImageData(0, 0, R, R).data; let hit = 0; for (const i of core) if (dd[i * 4 + 3] > 0) hit++;
+        return hit / core.length;
       }
+      function check() {
+        if (done) return; const c = coverage(); $('#tp', el).style.width = Math.min(100, Math.round(c / NEED * 100)) + '%';
+        if (c >= NEED) idleT = setTimeout(finish, IDLE); // wait a moment in case he's still adding strokes
+      }
+      function finish() {
+        if (done || cur) return; done = true; ST.traces++;
+        if (setKey && !doneSet.includes(ch)) doneSet.push(ch);
+        const all = setKey && doneSet.length >= 26; if (all) ST.abc[setKey] = [];
+        save(); SND[/\d/.test(ch) ? 'num' : 'letter'](/\d/.test(ch) ? Math.max(1, +ch) : ch);
+        if (all) { celebrate({ big: true, words: 'You traced the whole alphabet! Amazing, Atlas!' }); setTimeout(() => { if (current === 'play') { SND.tower(); celebrate({ big: true, words: 'Woo hoo!' }); } }, 3800); }
+        else celebrate({ words: `${sayItem(ch)}! Great tracing!` });
+      }
+      cleanup = () => { paradeOn = false; clearTimeout(paradeT); clearTimeout(idleT); };
       say(`Trace ${sayItem(ch)}`);
-      $('#prev', el).onclick = () => { P.idx--; trace(); };
-      $('#nxt', el).onclick = () => { P.idx++; trace(); };
-      $('#clr', el).onclick = () => { dc.clearRect(0, 0, W, W); strokes.length = 0; done = false; };
+      $('#prev', el).onclick = () => { clearTimeout(idleT); P.idx--; trace(); };
+      $('#nxt', el).onclick = () => { clearTimeout(idleT); P.idx++; trace(); };
+      $('#clr', el).onclick = () => { clearTimeout(idleT); dc.clearRect(0, 0, W, W); strokes.length = 0; done = false; $('#tp', el).style.width = '0'; SND.tap(); };
+      window.__trace = { ch, check, strokes, coverage, core: core.length, get done() { return done; } }; // test hook
     }
 
     function count() {
@@ -749,5 +787,7 @@ screens.parent = {
 };
 
 /* ---------- start ---------- */
+let rsT = 0, lastW = innerWidth;
+addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (current === 'play' && P.mode === 'trace') go('play'); } }, 300); });
 go('home');
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
