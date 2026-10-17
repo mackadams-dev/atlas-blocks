@@ -40,4 +40,13 @@ add('Trace the','Trace the'); add('All the shapes! Amazing, Atlas!');
 add('Which one starts with', 'Which one starts with'); add('Try again!');
 const ABCW=['apple','bird','cat','dog','elephant','fish','grapes','house','ice cream','juice','key','lion','moon','nose','octopus','pig','queen','rainbow','sun','tree','umbrella','violin','whale','xylophone','yarn','zebra'];
 ABCW.forEach((w,i)=>{ const c=L[i]; add(w, w[0].toUpperCase()+w.slice(1)+'.'); add(`${c.toUpperCase()} is for ${w}`, `[[${IPA[c]},]] is for ${w}!`); });
+// added v5
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SEAS=m=>['winter','spring','summer','fall'][Math.floor(((m+1)%12)/3)];
+MONTHS.forEach((m,i)=>{ add(m, m+'!'); add(`${m} is in ${SEAS(i)}!`); });
+['winter','spring','summer','fall','sunny','cloudy','rainy','stormy','snowy','windy','foggy'].forEach(w=>add(w, w[0].toUpperCase()+w.slice(1)+'!'));
+['What comes after','Put the months in order','Which one goes with','What season is','Which one is','Make the','picture','You did the puzzle!','The months of the year!','All twelve months!'].forEach(t=>add(t));
+// added v5b
+add('I feel','I feel'); ['hungry','angry','scared','silly','sick','excited','calm','loved'].forEach(w=>add(w, w[0].toUpperCase()+w.slice(1)+'.'));
+['How do you feel?','Wake up!','Brush teeth!','Bath time!','Night Night!','Great day!','My day!','Tap to add a block!','Great counting!','stickers','Let’s get stickers!','You got a sticker!','Let’s sing the ABCs!','Let’s count!','Now I know my ABCs!','Great singing!'].forEach(t=>add(t));
 process.stdout.write(JSON.stringify([...out]));

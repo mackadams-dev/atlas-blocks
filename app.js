@@ -9,7 +9,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ---------- settings & stats ---------- */
 const DEF = { sound: true, volume: 0.7, praiseSounds: true, voice: '', rate: 0.85, pitch: 1.1,
-  sections: { talk: true, potty: true, play: true, shapes: true, colors: true, match: true }, letterOnWords: true, captions: true,
+  sections: { talk: true, potty: true, play: true, shapes: true, colors: true, match: true, time: true, count: true, sing: true, feelings: true, routine: true, stickers: true }, letterOnWords: true, captions: true,
   micSens: 'med', micHold: 350, sitCount: 20, towerGoal: 10, triesCount: false, calm: false, countMax: 10 };
 const load = (k, d) => { try { return Object.assign(structuredCloneSafe(d), JSON.parse(localStorage.getItem(k) || '{}')); } catch { return structuredCloneSafe(d); } };
 function structuredCloneSafe(o) { return JSON.parse(JSON.stringify(o)); }
@@ -282,19 +282,32 @@ function pottyRequest() {
   celebrate({ words: 'I need to go potty!', speak: false });
   say('I need to go potty!', { show: false });
 }
+let homePage = 0;
 screens.home = {
   title: 'Atlas Blocks',
   render(el) {
-    const T = [['talk', '💬', 'Talk'], ['potty', '🚽', 'Potty'], ['play', '🔤', 'ABC 123'], ['shapes', '⭐', 'Shapes'], ['colors', '🎨', 'Colors'], ['match', '🍎', 'Match']].filter(t => S.sections[t[0]]);
+    const ALL = [['talk', '💬', 'Talk'], ['potty', '🚽', 'Potty'], ['play', '🔤', 'ABC 123'], ['shapes', '⭐', 'Shapes'], ['colors', '🎨', 'Colors'], ['match', '🍎', 'Match'],
+      ['time', '🌦️', 'Months & Weather'], ['count', '🧱', 'Count Blocks'], ['sing', '🎵', 'Sing-along'], ['feelings', '😀', 'Feelings'], ['routine', '🗓️', 'My Day'], ['stickers', '🌟', 'Stickers']]
+      .filter(t => S.sections[t[0]] !== false);
+    const PER = 6, pages = Math.max(1, Math.ceil(ALL.length / PER)); homePage = Math.min(homePage, pages - 1);
+    const T = ALL.slice(homePage * PER, homePage * PER + PER);
     el.innerHTML = `<div class="hello">${'ATLAS'.split('').map((c, i) => `<button class="hb" data-i="${i}" aria-label="${c}">${letterBlock(c, 70)}</button>`).join('')}</div>
+      <div class="homerow">${pages > 1 ? `<button class="pgbtn" id="pgL" aria-label="Previous page" ${homePage ? '' : 'disabled'}>◀</button>` : ''}
       <div class="tiles">${T.map(([k, p, l]) => `<button class="tile ${k}" data-go="${k}"><span class="pic">${p}</span>${l}</button>`).join('')}</div>
+      ${pages > 1 ? `<button class="pgbtn" id="pgR" aria-label="Next page" ${homePage < pages - 1 ? '' : 'disabled'}>▶</button>` : ''}</div>
+      ${pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === homePage ? 'on' : ''}"></i>`).join('')}</div>` : ''}
       ${S.sections.potty ? `<button class="bigpotty" id="potReq"><span style="font-size:1.4em">🚽</span> I need to go potty</button>` : ''}`;
     $$('.hb', el).forEach(b => b.onclick = async () => {
       const c = 'ATLAS'[b.dataset.i]; const blk = b.firstElementChild;
       blk.classList.remove('bounce'); void blk.offsetWidth; blk.classList.add('bounce'); SND.letter(c); say(c);
       if (b.dataset.i === '4') { await sleep(700); say('Atlas!'); }
     });
-    $$('[data-go]', el).forEach(b => b.onclick = () => { SND.tap(); go(b.dataset.go); });
+    $$('[data-go]', el).forEach(b => b.onclick = () => { SND.tap(); b.dataset.go === 'stickers' ? go('potty', 'stickers') : go(b.dataset.go); });
+    const pl = $('#pgL', el), prr = $('#pgR', el);
+    if (pl) pl.onclick = () => { SND.tap(); homePage--; go('home'); }; if (prr) prr.onclick = () => { SND.tap(); homePage++; go('home'); };
+    let sx = null; const tl = $('.tiles', el);
+    tl.addEventListener('pointerdown', e => { sx = e.clientX; }); tl.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null;
+      if (Math.abs(dx) > 80) { if (dx < 0 && prr && !prr.disabled) prr.click(); else if (dx > 0 && pl && !pl.disabled) pl.click(); } });
     const pr = $('#potReq', el); if (pr) pr.onclick = pottyRequest;
   }
 };
@@ -306,8 +319,18 @@ const CORE = [
   { w: 'yes', p: '👍', c: 'social' }, { w: 'no', p: '👎', c: 'no' }, { w: 'hurt', p: '🤕', c: 'feel' }, { w: 'happy', p: '😀', c: 'feel' },
   { w: 'sad', p: '😢', c: 'feel' }, { w: 'mad', p: '😠', c: 'feel' }, { w: 'Daddy', p: '👨', c: 'people' }, { w: 'Momma', p: '👩', c: 'people' },
   { w: 'Goose', p: '🐶', c: 'people' }, { w: 'Tuna', p: '🐱', c: 'people' },
-  { w: 'music', p: '🎵', c: 'thing' }, { w: 'blocks', p: '🧱', c: 'thing' }, { w: 'hug', p: '🤗', c: 'social' }, { w: 'tired', p: '😴', c: 'feel' }
+  { w: 'Night Night', p: '🌙', c: 'social' }, { w: 'music', p: '🎵', c: 'thing' }, { w: 'blocks', p: '🧱', c: 'thing' }, { w: 'hug', p: '🤗', c: 'social' }, { w: 'tired', p: '😴', c: 'feel' }
 ];
+/* fit a grid of n buttons into the remaining screen height (no scrolling) */
+function fitGrid(grid, n, gap = 10) {
+  const W = grid.clientWidth, H = innerHeight - grid.getBoundingClientRect().top - scrollY - 30; let best = null;
+  for (let cols = 3; cols <= 10; cols++) { const rows = Math.ceil(n / cols), w = (W - gap * (cols - 1)) / cols, h = (H - gap * (rows - 1)) / rows;
+    const sc = Math.min(w, h * 1.15); if (!best || sc > best.sc) best = { cols, h: Math.min(h, w * 1.1), sc }; }
+  const h = Math.max(64, Math.floor(best.h));
+  grid.style.gridTemplateColumns = `repeat(${best.cols},1fr)`; grid.style.gap = gap + 'px';
+  $$('.word', grid).forEach(b => { b.style.minHeight = '0'; b.style.height = h + 'px'; b.style.padding = '4px'; b.style.fontSize = Math.max(14, Math.min(22, h * .16)) + 'px'; });
+  grid.style.setProperty('--wp', Math.max(22, Math.min(64, h * .42)) + 'px');
+}
 screens.talk = {
   title: 'Talk',
   async render(el) {
@@ -320,6 +343,7 @@ screens.talk = {
     $('#grid', el).innerHTML = items.map((it, i) => `<button class="word ${it.c}" data-i="${i}">
       ${S.letterOnWords ? letterBlock(it.w[0].toUpperCase(), 34, 'small') : ''}
       ${it.img ? `<img alt="" src="${blobURL(it.img)}">` : `<span class="pic">${it.p}</span>`}<span>${esc(it.w)}</span></button>`).join('');
+    fitGrid($('#grid', el), items.length);
     const draw = () => { $('#words', el).innerHTML = sentence.length ? sentence.map(w => `<span>${esc(w)}</span>`).join('') : '<span class="ph">Tap pictures to talk</span>'; };
     $$('.word', el).forEach(b => b.onclick = () => {
       const it = items[b.dataset.i]; ST.words++; save();
@@ -350,8 +374,11 @@ function towerHTML(n, goal) {
   return `<div class="tower" id="tower">${Array.from({ length: goal }, (_, i) =>
     `<span class="cube ${i < n ? (i === n - 1 ? 'face' : '') : 'ghost'}" style="--h:${i < n ? ncol(i + 1) : '#9aa4b8'};animation-delay:${i < n ? Math.min(i, 3) * .05 : 0}s">${i < n && i === n - 1 ? '<i></i>' : ''}</span>`).join('')}</div>`;
 }
+const STICKERS = ['⭐', '🌟', '🚀', '🦖', '🐶', '🐱', '🌈', '🍭', '🎈', '🦄', '🚂', '🐠', '🦁', '🍦', '🏆', '🎉', '🐝', '🍓', '🚗', '🦋'];
+const STICKER_GOAL = 20;
+function addSticker() { ST.stickers = ST.stickers || []; ST.stickers.push(STICKERS[ST.stickers.length % STICKERS.length]); if (ST.stickers.length > STICKER_GOAL) ST.stickers = ST.stickers.slice(-1); }
 function addTowerBlock(el) {
-  ST.tower++; ST.potty++;
+  ST.tower++; ST.potty++; addSticker();
   const goal = S.towerGoal;
   if (ST.tower >= goal) {
     ST.towers++; save();
@@ -368,10 +395,11 @@ screens.potty = {
     function tabs(sel) {
       return `<div class="tabs"><button class="chip ${sel === 'mission' ? 'sel' : ''}" data-v="mission">🚀 Mission</button>
         <button class="chip ${sel === 'tower' ? 'sel' : ''}" data-v="tower">🏆 Tower</button>
+        <button class="chip ${sel === 'stickers' ? 'sel' : ''}" data-v="stickers">🌟 Stickers</button>
         <button class="chip" id="ask" style="background:var(--green);color:#fff;border-color:var(--green)">🚽 I need to go potty</button></div>`;
     }
     function wire() {
-      $$('[data-v]', el).forEach(b => b.onclick = () => { stopT(); SND.tap(); b.dataset.v === 'tower' ? tower() : (step = 0, mission()); });
+      $$('[data-v]', el).forEach(b => b.onclick = () => { stopT(); SND.tap(); b.dataset.v === 'tower' ? tower() : b.dataset.v === 'stickers' ? stickers() : (step = 0, mission()); });
       $('#ask', el).onclick = pottyRequest;
     }
     function mission() {
@@ -420,7 +448,16 @@ screens.potty = {
       $('#addB', el).onclick = () => { addTowerBlock(el); setTimeout(() => current === 'potty' && ST.tower > 0 && tower(), 400); };
       say(n ? `${nword(n)} blocks!` : 'Let\u2019s build a tower!', { show: false, quiet: true });
     }
-    view === 'tower' ? tower() : mission();
+    function stickers() {
+      const got = ST.stickers || [];
+      el.innerHTML = tabs('stickers') + `<div class="stickwrap"><div class="stickgrid">${Array.from({ length: STICKER_GOAL }, (_, i) => `<span class="stk ${i < got.length ? 'got' : ''}">${i < got.length ? got[i] : i + 1}</span>`).join('')}</div>
+        <div class="stickside"><h2>Sticker Chart</h2><div class="sitnum">${got.length} <span style="font-size:.4em" class="muted">of ${STICKER_GOAL}</span></div>
+        <p>Every potty in the potty gets a sticker!</p><div class="btnrow"><button class="btn" id="addS">🌟 I went potty!</button></div></div></div>`;
+      wire();
+      $('#addS', el).onclick = () => { addTowerBlock(el); setTimeout(() => { if (current === 'potty') stickers(); }, 600); setTimeout(() => say('You got a sticker!'), 2600); };
+      say(got.length ? `${nword(got.length)} stickers!` : 'Let\u2019s get stickers!', { show: false, quiet: true });
+    }
+    view === 'tower' ? tower() : view === 'stickers' ? stickers() : mission();
   }
 };
 
@@ -672,6 +709,245 @@ screens.match = {
   }
 };
 
+/* ---------- Months, Seasons & Weather ---------- */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const SEASONS = [['winter', '⛄', '#5f8ef0'], ['spring', '🌷', '#3fbf60'], ['summer', '🏖️', '#f5a623'], ['fall', '🍂', '#d9682b']];
+const SEASON_OF = m => SEASONS[Math.floor(((m + 1) % 12) / 3)]; // Dec-Feb winter, Mar-May spring, Jun-Aug summer, Sep-Nov fall
+const SEASON_PICS = { winter: ['⛄', '❄️', '🧤', '🛷'], spring: ['🌷', '🐣', '🌱', '🦋'], summer: ['🏖️', '🍉', '🩳', '🏊'], fall: ['🍂', '🎃', '🍁', '🌰'] };
+const WEATHER = [['sunny', '☀️', '#8fd3ff'], ['cloudy', '☁️', '#b8c7d9'], ['rainy', '🌧️', '#8aa0b8'], ['stormy', '⛈️', '#5d6b82'], ['snowy', '🌨️', '#dfe9f5'],
+  ['windy', '🌬️', '#bfe3f2'], ['foggy', '🌫️', '#cfd4da'], ['rainbow', '🌈', '#9fd8ff']];
+const W_OPT = { mode: 'months', puzzle: 0 };
+const choiceBtns = opts => `<div class="mopts ${opts.length > 3 ? 'four' : ''}">${opts.map(o => `<button class="mopt" data-v="${esc(o.v)}"${o.c ? ` style="border-color:${o.c}"` : ''}><span class="pic">${o.pic}</span>${o.label ? `<span>${esc(o.label)}</span>` : ''}</button>`).join('')}</div>`;
+screens.time = {
+  title: 'Months, Seasons & Weather',
+  render(el) {
+    let T = 0, playOn = false; const tm = (f, ms) => { clearTimeout(T); T = setTimeout(f, ms); };
+    cleanup = () => { clearTimeout(T); playOn = false; };
+    const MODES = [['months', '📅 Months'], ['next', '➡️ Next'], ['order', '🧩 Order'], ['seasons', '🌸 Seasons'], ['mseason', '📆 Month → Season'], ['weather', '🌦️ Weather'], ['puzzle', '🧩 Puzzle']];
+    function shell(inner) {
+      el.innerHTML = `<div class="tabs wtabs">${MODES.map(([k, l]) => `<button class="chip ${W_OPT.mode === k ? 'sel' : ''}" data-m="${k}">${l}</button>`).join('')}</div><div id="wb" class="wbody">${inner}</div>`;
+      $$('[data-m]', el).forEach(b => b.onclick = () => { cleanup(); W_OPT.mode = b.dataset.m; SND.tap(); run(); });
+    }
+    /* generic choice round: prompt, options [{v,pic,label}], right value, praise words */
+    function quiz({ head, prompt, opts, right, praise, again }) {
+      shell(`<div class="wq"><div class="whead">${head}</div>${choiceBtns(opts)}</div>`);
+      say(prompt); const h = $('.whead', el); h.onclick = () => say(prompt);
+      let solved = false;
+      $$('.mopt', el).forEach(b => b.onclick = () => {
+        if (solved) return;
+        if (b.dataset.v === right) { solved = true; b.classList.add('right', 'bounce'); ST.wins = (ST.wins || 0) + 1; save(); celebrate({ words: praise }); tm(again, 3400); }
+        else { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); SND.soft(); say('Try again!'); }
+      });
+    }
+    const monthCard = (i, cls = '') => { const [, , col] = SEASON_OF(i); return `<span class="mcard ${cls}" style="--mc:${col};background:${col}22"><b>${MONTHS[i].slice(0, 3)}</b><small>${MONTHS[i]}</small></span>`; };
+    const modes = {
+      months() {
+        shell(`<div class="mgrid">${MONTHS.map((m, i) => `<button class="mbtn" data-i="${i}">${monthCard(i)}</button>`).join('')}</div>
+          <div class="btnrow wnav"><button class="btn" id="sing">▶️ Say them all</button></div>`);
+        const hi = i => { $$('.mbtn', el).forEach(b => b.classList.toggle('on', +b.dataset.i === i)); };
+        $$('.mbtn', el).forEach(b => b.onclick = () => { playOn = false; const i = +b.dataset.i; hi(i); SND.num(i + 1); say(MONTHS[i]); });
+        $('#sing', el).onclick = async () => {
+          if (playOn) { playOn = false; return; } playOn = true; $('#sing', el).textContent = '⏸ Stop';
+          for (let i = 0; i < 12 && playOn; i++) { hi(i); SND.num(i + 1); await say(MONTHS[i], { rate: 1 }); await sleep(250); }
+          const fin = playOn; playOn = false; hi(-1); if ($('#sing', el)) $('#sing', el).textContent = '▶️ Say them all';
+          if (fin) celebrate({ big: true, words: 'All twelve months! Great job!' });
+        };
+        say('The months of the year!');
+      },
+      next() {
+        const i = Math.floor(Math.random() * 12), n = (i + 1) % 12;
+        const wrong = shuffle([...Array(12).keys()].filter(k => k !== n && k !== i)).slice(0, 2);
+        quiz({ head: `<div class="wprompt">${monthCard(i, 'big')}<span class="arrow">➡️</span><span class="qmark">?</span></div>`, prompt: `What comes after ${MONTHS[i]}?`,
+          opts: shuffle([n, ...wrong]).map(k => ({ v: String(k), pic: monthCard(k) })), right: String(n), praise: `${MONTHS[n]}! Great job!`, again: modes.next });
+      },
+      order() {
+        const len = 4, st = Math.floor(Math.random() * 12), seq = Array.from({ length: len }, (_, k) => (st + k) % 12); let k = 0;
+        shell(`<div class="wq"><div class="slots">${seq.map((_, j) => `<span class="slot" data-j="${j}">${j + 1}</span>`).join('')}</div>
+          <div class="mopts four">${shuffle(seq).map(m => `<button class="mopt" data-v="${m}"><span class="pic">${monthCard(m)}</span></button>`).join('')}</div></div>`);
+        say(`Put the months in order. Start with ${MONTHS[seq[0]]}`);
+        $$('.mopt', el).forEach(b => b.onclick = () => {
+          if (b.disabled) return;
+          if (+b.dataset.v === seq[k]) { b.disabled = true; b.classList.add('used'); const sl = $(`.slot[data-j="${k}"]`, el); sl.innerHTML = monthCard(seq[k]); sl.classList.add('filled', 'bounce');
+            SND.num(k + 1); say(MONTHS[seq[k]], { rate: 1 }); k++;
+            if (k === len) { ST.orders++; save(); tm(() => celebrate({ words: 'In order! Great job!' }), 700); T2 = setTimeout(() => current === 'time' && W_OPT.mode === 'order' && modes.order(), 4000); } }
+          else { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); SND.soft(); say('Try again!'); }
+        });
+      },
+      seasons() {
+        const [name, , col] = rnd(SEASONS);
+        quiz({ head: `<div class="wprompt"><span class="sname" style="color:${col}">${cap(name)}</span></div>`, prompt: `Which one goes with ${name}?`,
+          opts: shuffle(SEASONS.map(([n]) => ({ v: n, pic: rnd(SEASON_PICS[n]) }))), right: name, praise: `${cap(name)}! Great job!`, again: modes.seasons });
+      },
+      mseason() {
+        const m = Math.floor(Math.random() * 12), [sn] = SEASON_OF(m);
+        quiz({ head: `<div class="wprompt">${monthCard(m, 'big')}</div>`, prompt: `What season is ${MONTHS[m]}?`,
+          opts: SEASONS.map(([n, pic, c]) => ({ v: n, pic, label: cap(n), c })), right: sn, praise: `${MONTHS[m]} is in ${sn}!`, again: modes.mseason });
+      },
+      weather() {
+        const opts = shuffle(WEATHER).slice(0, 4), [name] = rnd(opts);
+        quiz({ head: `<div class="wprompt"><span class="sname">${cap(name)}</span></div>`, prompt: `Which one is ${name}?`,
+          opts: opts.map(([n, pic, c]) => ({ v: n, pic, c })), right: name, praise: `${cap(name)}! Great job!`, again: modes.weather });
+      },
+      puzzle() { weatherPuzzle(); }
+    };
+    let T2 = 0; const oc = cleanup; cleanup = () => { oc(); clearTimeout(T2); };
+    /* jigsaw: a weather picture cut into 4 big pieces; drag (or tap piece, then tap spot) */
+    function weatherPuzzle() {
+      const [name, emo, sky] = WEATHER[W_OPT.puzzle % WEATHER.length];
+      shell(`<div class="pz"><div class="pzboard" id="pzb"></div><div class="pztray" id="pzt"></div></div>
+        <div class="btnrow wnav"><button class="btn alt" id="pzn">➡️ New picture</button></div>`);
+      const land = innerWidth > innerHeight, top = $('#pzb', el).getBoundingClientRect().top;
+      const nav = 96, avail = innerHeight - top - nav - 10;
+      const S2 = Math.max(200, Math.floor(Math.min(land ? avail : (avail - 20) / 1.55, land ? (el.clientWidth - 40) / 2.1 : el.clientWidth - 20, 460)));
+      const half = S2 / 2;
+      const src = document.createElement('canvas'), dpr = Math.min(2, devicePixelRatio || 1); src.width = src.height = S2 * dpr; const c = src.getContext('2d'); c.scale(dpr, dpr);
+      const gr = c.createLinearGradient(0, 0, 0, S2); gr.addColorStop(0, sky); gr.addColorStop(1, '#ffffff'); c.fillStyle = gr; c.fillRect(0, 0, S2, S2);
+      c.fillStyle = '#7cc66b'; c.fillRect(0, S2 * .82, S2, S2 * .18);
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `${S2 * .62}px "Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif`; c.fillText(emo, S2 / 2, S2 * .47);
+      const board = $('#pzb', el), tray = $('#pzt', el);
+      board.style.width = board.style.height = S2 + 'px'; tray.style.width = land ? S2 + 'px' : S2 + 'px'; tray.style.height = land ? S2 + 'px' : half + 'px';
+      board.innerHTML = `<img class="pzghost" alt="" src="${src.toDataURL()}" style="width:${S2}px;height:${S2}px">` + [0, 1, 2, 3].map(q => `<span class="pzslot" data-q="${q}" style="left:${(q % 2) * half}px;top:${Math.floor(q / 2) * half}px;width:${half}px;height:${half}px"></span>`).join('');
+      let placed = 0, sel = null;
+      const order = shuffle([0, 1, 2, 3]);
+      const pieces = order.map((q, k) => {
+        const p = document.createElement('canvas'); p.width = p.height = half * dpr; p.className = 'pzpiece'; p.dataset.q = q;
+        p.getContext('2d').drawImage(src, (q % 2) * half * dpr, Math.floor(q / 2) * half * dpr, half * dpr, half * dpr, 0, 0, half * dpr, half * dpr);
+        const sc = land ? .92 : .86, pw = half * sc;
+        p.style.width = p.style.height = pw + 'px';
+        const home = land ? [(k % 2) * half + (half - pw) / 2, Math.floor(k / 2) * half + (half - pw) / 2] : [k * (S2 / 4) + (S2 / 4 - pw * .5) / 2, (half - pw * .5) / 2];
+        if (!land) { p.style.width = p.style.height = pw * .5 + 'px'; }
+        p.style.left = home[0] + 'px'; p.style.top = home[1] + 'px'; p._home = home; p._w = parseFloat(p.style.width);
+        tray.appendChild(p); return p;
+      });
+      const place = (p, slot) => {
+        if (+slot.dataset.q !== +p.dataset.q) { SND.soft(); say('Try again!'); back(p); return; }
+        slot.appendChild(p); p.classList.add('done'); p.style.left = p.style.top = '0'; p.style.width = p.style.height = half + 'px'; p.style.transform = ''; slot.classList.add('filled');
+        SND.num(++placed); if (placed === 4) { ST.wins = (ST.wins || 0) + 1; save(); tm(() => celebrate({ big: true, words: `${cap(name)}! You did the puzzle!` }), 400); T2 = setTimeout(() => { if (current === 'time' && W_OPT.mode === 'puzzle') { W_OPT.puzzle++; weatherPuzzle(); } }, 4200); }
+      };
+      const back = p => { p.style.transform = ''; p.style.zIndex = ''; p.classList.remove('sel'); };
+      const slotAt = (x, y) => $$('.pzslot', el).find(sl => { const r = sl.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; });
+      pieces.forEach(p => {
+        let sx = 0, sy = 0, moved = false;
+        p.onpointerdown = e => { if (p.classList.contains('done')) return; e.preventDefault(); try { p.setPointerCapture(e.pointerId); } catch (x) {} sx = e.clientX; sy = e.clientY; moved = false; p.style.zIndex = 5; };
+        p.onpointermove = e => { if (!sx || p.classList.contains('done')) return; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 8) moved = true; p.style.transform = `translate(${dx}px,${dy}px) scale(1.06)`; };
+        p.onpointerup = e => { if (!sx || p.classList.contains('done')) return; sx = 0;
+          if (!moved) { back(p); $$('.pzpiece', el).forEach(o => o.classList.remove('sel')); sel = p; p.classList.add('sel'); SND.tap(); return; }
+          const sl = slotAt(e.clientX, e.clientY); if (sl && !sl.classList.contains('filled')) place(p, sl); else back(p); };
+      });
+      $$('.pzslot', el).forEach(sl => sl.onclick = () => { if (sel && !sl.classList.contains('filled')) { const p = sel; sel = null; place(p, sl); } });
+      $('#pzn', el).onclick = () => { SND.tap(); W_OPT.puzzle++; weatherPuzzle(); };
+      say(`Make the ${name} picture!`);
+      window.__pz = { name, pieces };
+    }
+    const run = () => { clearTimeout(T); clearTimeout(T2); playOn = false; $('#toast').classList.remove('show'); modes[W_OPT.mode](); };
+    run();
+  }
+};
+
+/* ---------- Count Blocks: tap to stack, count aloud, then trace the number ---------- */
+let cbN = 0;
+screens.count = {
+  title: 'Count Blocks',
+  render(el) {
+    const MAX = 20;
+    const draw = () => {
+      el.innerHTML = `<div class="cbwrap"><button class="cbstage" id="cbs" aria-label="Add a block">${cbN ? numberBlock(cbN, cbSize(), { label: false, cls: 'cbnb' }) : '<span class="muted cbhint">Tap to add a block!</span>'}</button>
+        <div class="cbside"><div class="sitnum" id="cbn">${cbN}</div><div class="cbword">${cbN ? cap(nword(cbN)) : ''}</div>
+        <div class="btnrow"><button class="btn" id="cbp">➕</button><button class="btn alt" id="cbm">➖</button></div>
+        <div class="btnrow"><button class="btn alt" id="cbc">🔊 Count</button><button class="btn purple" id="cbt" ${cbN ? '' : 'disabled'}>✍️ Trace ${cbN || ''}</button></div>
+        <div class="btnrow"><button class="btn alt" id="cb0">🧽 Start over</button></div></div></div>`;
+      const add = () => { if (cbN >= MAX) { SND.soft(); return; } cbN++; draw(); const nb = $('.cbnb', el); if (nb) nb.classList.add('bounce'); SND.num(cbN); say(cap(nword(cbN)) + '!', { rate: 1 });
+        if (cbN % 5 === 0) celebrate({ words: `${cap(nword(cbN))}! Great counting!` }); };
+      $('#cbs', el).onclick = add; $('#cbp', el).onclick = add;
+      $('#cbm', el).onclick = () => { if (cbN > 0) { cbN--; draw(); SND.tap(); if (cbN) say(cap(nword(cbN)), { rate: 1 }); } };
+      $('#cb0', el).onclick = () => { cbN = 0; draw(); SND.tap(); };
+      $('#cbc', el).onclick = async () => { for (let i = 1; i <= cbN; i++) { if (current !== 'count') return; $('#cbn', el).textContent = i; SND.num(i); await say(nword(i), { rate: 1, show: false }); }
+        if (cbN) celebrate({ words: `${cap(nword(cbN))}! Great counting!` }); };
+      $('#cbt', el).onclick = () => { if (!cbN) return; P.mode = 'trace'; P.set = '123'; P.rev = false; P.idx = cbN; go('play'); };
+    };
+    const cbSize = () => { const h = innerHeight - 200, rows = Math.min(10, cbN || 1); return Math.max(14, Math.min(48, Math.floor(h / (rows + 1.5)))); };
+    draw(); if (!cbN) say('Tap to add a block!');
+  }
+};
+
+/* ---------- Sing-along: ABC song and counting song, items light up as they're sung ---------- */
+// public-domain "Twinkle"/ABC tune, one note per letter (MIDI)
+const ABC_TUNE = [60, 60, 67, 67, 69, 69, 67, 65, 65, 64, 64, 62, 62, 62, 62, 60, 67, 67, 65, 64, 64, 62, 67, 65, 64, 62];
+const ABC_BEATS = [1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, .5, .5, .5, .5, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2];
+const COUNT_TUNE = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 74, 72, 71, 69, 67, 65, 64, 62, 60, 72];
+let singSong = 'abc';
+screens.sing = {
+  title: 'Sing-along',
+  render(el) {
+    let on = false; cleanup = () => { on = false; };
+    const items = () => singSong === 'abc' ? UP : singSong === 'c10' ? Array.from({ length: 10 }, (_, i) => String(i + 1)) : Array.from({ length: 20 }, (_, i) => String(i + 1));
+    const draw = () => {
+      const it = items();
+      el.innerHTML = `<div class="tabs">${[['abc', '🔤 ABC song'], ['c10', '🔢 Count to 10'], ['c20', '🔢 Count to 20']].map(([k, l]) => `<button class="chip ${singSong === k ? 'sel' : ''}" data-s="${k}">${l}</button>`).join('')}</div>
+        <div class="singgrid ${singSong}">${it.map((x, i) => `<span class="sg" data-i="${i}">${/\d/.test(x) ? `<b class="sgn">${x}</b>` : letterBlock(x, sgSize(it.length), 'small')}</span>`).join('')}</div>
+        <div class="btnrow wnav"><button class="btn" id="go">▶️ Sing!</button></div>`;
+      $$('[data-s]', el).forEach(b => b.onclick = () => { on = false; singSong = b.dataset.s; SND.tap(); draw(); });
+      $$('.sg', el).forEach(b => b.onclick = () => { const x = it[+b.dataset.i]; light(+b.dataset.i); /\d/.test(x) ? SND.num(+x) : SND.letter(x); say(/\d/.test(x) ? nword(+x) : x, { rate: 1, show: false }); });
+      $('#go', el).onclick = sing;
+    };
+    const sgSize = n => { const land = innerWidth > innerHeight, cols = land ? (n > 20 ? 9 : 10) : (n > 20 ? 6 : 5), rows = Math.ceil(n / cols);
+      return Math.max(34, Math.min(92, Math.floor(Math.min((el.clientWidth - 20) / cols - 14, (innerHeight - 330) / rows - 14)))); };
+    const light = i => $$('.sg', el).forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+    async function sing() {
+      if (on) { on = false; return; } on = true; $('#go', el).textContent = '⏸ Stop';
+      const it = items(), abc = singSong === 'abc';
+      await say(abc ? 'Let\u2019s sing the ABCs!' : 'Let\u2019s count!', { show: false }); await sleep(200);
+      for (let i = 0; i < it.length && on; i++) {
+        light(i); const m = abc ? ABC_TUNE[i] : COUNT_TUNE[i % COUNT_TUNE.length], beats = abc ? ABC_BEATS[i] : 1;
+        tone(mtof(m), 0, .35, 'triangle', .22); const t0 = Date.now();
+        await say(abc ? it[i] : nword(+it[i]), { rate: 1, show: false });
+        const want = (abc ? 520 : 650) * beats; const left = want - (Date.now() - t0); if (left > 0) await sleep(left);
+      }
+      const fin = on; on = false; light(-1); if ($('#go', el)) $('#go', el).textContent = '▶️ Sing!';
+      if (fin) { if (abc) { SND.chime(); await say('Now I know my ABCs!'); } celebrate({ big: true, words: 'Great singing!' }); }
+    }
+    draw();
+  }
+};
+
+/* ---------- Feelings board ---------- */
+const FEELINGS = [['happy', '😀', '#f4c22b'], ['sad', '😢', '#5f8ef0'], ['tired', '😴', '#8e7cc3'], ['hungry', '😋', '#f59b23'], ['angry', '😠', '#e04848'], ['scared', '😨', '#6a7be8'],
+  ['silly', '🤪', '#ef5d93'], ['sick', '🤒', '#3fbf60'], ['excited', '🤩', '#ff7a45'], ['calm', '😌', '#14b0bf'], ['hurt', '🤕', '#c25fd1'], ['loved', '🥰', '#e4588f']];
+screens.feelings = {
+  title: 'Feelings',
+  render(el) {
+    el.innerHTML = `<div class="feelgrid">${FEELINGS.map(([w, p, c]) => `<button class="feel" data-w="${w}" style="--k:${c}"><span class="pic">${p}</span><span>${cap(w)}</span></button>`).join('')}</div>`;
+    $$('.feel', el).forEach(b => b.onclick = () => { b.classList.remove('bounce'); void b.offsetWidth; b.classList.add('bounce'); ST.words++; save(); say(`I feel ${b.dataset.w}`); });
+    say('How do you feel?');
+  }
+};
+
+/* ---------- My Day: picture schedule, tap to mark done ---------- */
+const ROUTINE = [['wake', '🌅', 'Wake up', 'Wake up!'], ['teeth', '🦷', 'Brush teeth', 'Brush teeth!'], ['eat', '🍽️', 'Eat', 'Eat!'], ['play', '🧸', 'Play', 'Play!'],
+  ['bath', '🛁', 'Bath', 'Bath time!'], ['night', '🌙', 'Night Night', 'Night Night!']];
+screens.routine = {
+  title: 'My Day',
+  render(el) {
+    const today = new Date().toDateString();
+    if (!ST.day || ST.day.date !== today) { ST.day = { date: today, done: [] }; save(); }
+    const draw = () => {
+      const dn = ST.day.done, nextI = ROUTINE.findIndex(r => !dn.includes(r[0]));
+      el.innerHTML = `<div class="routine">${ROUTINE.map(([k, p, l], i) => `<button class="rstep ${dn.includes(k) ? 'done' : ''} ${i === nextI ? 'now' : ''}" data-k="${k}">
+          <span class="rnum">${i + 1}</span><span class="pic">${dn.includes(k) ? '✅' : p}</span><span class="rl">${l}</span></button>`).join('')}</div>
+        <div class="btnrow wnav"><button class="btn alt" id="rreset">🧽 Start the day over</button></div>`;
+      $$('.rstep', el).forEach(b => b.onclick = () => {
+        const k = b.dataset.k, r = ROUTINE.find(x => x[0] === k);
+        if (dn.includes(k)) { ST.day.done = dn.filter(x => x !== k); save(); SND.tap(); draw(); return; }
+        dn.push(k); save(); draw(); SND.chime(); say(r[3]);
+        if (ROUTINE.every(x => dn.includes(x[0]))) setTimeout(() => celebrate({ big: true, words: 'All done! Great day!' }), 1200);
+        else setTimeout(() => { applause(1.2, 5); }, 300);
+      });
+      $('#rreset', el).onclick = () => { ST.day.done = []; save(); SND.tap(); draw(); };
+    };
+    draw(); say('My day!', { show: false });
+  }
+};
+
 /* ---------- Parent area (hold lock 3 seconds) ---------- */
 (function lock() {
   const b = $('#lockBtn'); let t = 0;
@@ -698,7 +974,7 @@ screens.parent = {
       <div class="row"><span></span><button class="sbtn" id="test">🔊 Test voice + praise</button></div></div>
 
     <div class="panel"><h3 style="margin-top:0">Sections on the home screen</h3>
-      ${[['talk', 'Talk board'], ['potty', 'Potty Mission'], ['play', 'ABC & 123'], ['shapes', 'Shapes tracing'], ['colors', 'Color tracing'], ['match', 'ABC Match']].map(([k, l]) => `<div class="row">${l} ${sw(k, S.sections).replace('data-k', 'data-sec')}</div>`).join('')}
+      ${[['talk', 'Talk board'], ['potty', 'Potty Mission'], ['play', 'ABC & 123'], ['shapes', 'Shapes tracing'], ['colors', 'Color tracing'], ['match', 'ABC Match'], ['time', 'Months, Seasons & Weather'], ['count', 'Count Blocks'], ['sing', 'Sing-along'], ['feelings', 'Feelings'], ['routine', 'My Day schedule'], ['stickers', 'Sticker chart tile']].map(([k, l]) => `<div class="row">${l} ${sw(k, S.sections).replace('data-k', 'data-sec')}</div>`).join('')}
       <div class="row">Less motion (calm mode) ${sw('calm')}</div></div>
 
     <div class="panel"><h3 style="margin-top:0">Talk board</h3>
@@ -723,7 +999,7 @@ screens.parent = {
       ${[['potty', '🚽 Potty successes'], ['tries', '👍 Potty tries'], ['tower', '🧱 Blocks on current tower'], ['towers', '🏆 Towers built'], ['asks', '🙋 Asked for potty'],
         ['missions', '🚀 Potty missions finished'], ['words', '💬 Talk buttons pressed'], ['traces', '✍️ Letters/numbers traced'], ['counts', '🍎 Counting wins'], ['orders', '🧱 Ordering wins']]
         .map(([k, l]) => `<div class="row">${l} <b style="font-size:24px">${ST[k]}</b></div>`).join('')}
-      <div class="row"><button class="sbtn" id="resetTower">Reset tower</button><button class="sbtn red" id="resetAll">Reset all counts</button></div></div>
+      <div class="row"><button class="sbtn" id="resetTower">Reset tower</button><button class="sbtn" id="resetStk">Reset sticker chart</button><button class="sbtn red" id="resetAll">Reset all counts</button></div></div>
 
     <div class="panel"><h3 style="margin-top:0">Tips for grown-ups</h3><ul class="tips">
       <li><b>Model, don't test.</b> Tap the Talk buttons yourself while you talk ("more… more juice"). Kids learn to use picture talk by seeing it used, not by being quizzed.</li>
@@ -751,6 +1027,7 @@ screens.parent = {
     $('#test', el).onclick = () => celebrate({ words: 'Great job Atlas!' });
     const sel = (id, k, num = true) => $(id, el).onchange = e => { S[k] = num ? +e.target.value : e.target.value; save(); };
     sel('#sit', 'sitCount'); sel('#goal', 'towerGoal'); sel('#cmax', 'countMax');
+    $('#resetStk', el).onclick = () => { if (confirm('Clear the sticker chart?')) { ST.stickers = []; save(); go('parent'); } };
     $('#resetTower', el).onclick = () => { if (confirm('Start a new tower at 0?')) { ST.tower = 0; save(); go('parent'); } };
     $('#resetAll', el).onclick = () => { if (confirm('Reset all progress counts?')) { Object.keys(ST).forEach(k => ST[k] = 0); save(); go('parent'); } };
     async function list() {
@@ -793,6 +1070,6 @@ screens.parent = {
 
 /* ---------- start ---------- */
 let rsT = 0, lastW = innerWidth;
-addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if ((current === 'play' && P.mode === 'trace') || current === 'shapes' || current === 'colors') go(current); } }, 300); });
+addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (current === 'talk' || (current === 'play' && P.mode === 'trace') || current === 'shapes' || current === 'colors' || (current === 'time' && W_OPT.mode === 'puzzle')) go(current); } }, 300); });
 go('home');
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
